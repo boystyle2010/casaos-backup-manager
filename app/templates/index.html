@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CasaOS Backup Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            darkbg: '#0a0d12',
+            darkcard: '#131720',
+            darkborder: '#222834'
+          }
+        }
+      }
+    }
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#f2f2f7] text-slate-900 dark:bg-darkbg dark:text-slate-100 transition-colors duration-200 pb-32"
+      x-data="backupManager()" x-init="initApp()" x-cloak>
+
+  <!-- 1. FLOATING TOAST POPUP -->
+  <div x-show="toast.message"
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 -translate-y-6 scale-95"
+       x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+       x-transition:leave-end="opacity-0 -translate-y-6 scale-95"
+       class="fixed top-4 inset-x-4 max-w-md mx-auto z-50 pointer-events-auto">
+    <div class="p-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 text-xs sm:text-sm"
+         :class="toast.type === 'error'
+           ? 'bg-red-950/95 border-red-600/80 text-red-100 shadow-red-950/50'
+           : 'bg-emerald-950/95 border-emerald-500/80 text-emerald-100 shadow-emerald-950/50'">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+             :class="toast.type === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'">
+          <svg x-show="toast.type !== 'error'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+          </svg>
+          <svg x-show="toast.type === 'error'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008z"/>
+          </svg>
+        </div>
+        <span class="font-semibold break-words leading-snug" x-text="toast.message"></span>
+      </div>
+      <button @click="toast.message = ''" class="text-xs font-semibold opacity-80 hover:opacity-100 px-2 py-1 rounded-lg bg-white/10 shrink-0" x-text="t('close')"></button>
+    </div>
+  </div>
+
+  <!-- 2. FLOATING BACKGROUND TASK PROGRESS BAR (Có nút Hủy & nút Thu gọn) -->
+  <div x-show="task.active" class="fixed bottom-5 inset-x-4 max-w-md mx-auto z-40 pointer-events-auto">
+    <div x-show="!progressMinimized" x-transition
+         class="bg-white/95 dark:bg-[#181d28]/95 backdrop-blur-xl border border-blue-500/40 rounded-2xl p-4 shadow-2xl space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <svg class="w-4 h-4 text-blue-500 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span class="text-xs sm:text-sm font-bold truncate" x-text="task.title"></span>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <!-- Nút Hủy Tiến Trình -->
+          <button @click="cancelRunningTask()"
+                  class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-500 hover:bg-rose-500/25 border border-rose-500/30 transition"
+                  x-text="t('cancelTaskBtn')">
+          </button>
+          <!-- Nút Thu gọn -->
+          <button @click="progressMinimized = true"
+                  class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:bg-slate-200 transition"
+                  x-text="t('hideProgress')">
+          </button>
+        </div>
+      </div>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" x-text="task.detail"></p>
+      <div class="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500 rounded-full"
+             :style="`width: ${Math.max(task.progress || 10, 8)}%`"></div>
+      </div>
+    </div>
+
+    <div x-show="progressMinimized" x-transition class="flex justify-end gap-2">
+      <button @click="progressMinimized = false"
+              class="bg-blue-600 text-white text-xs font-semibold px-3.5 py-2 rounded-full shadow-xl flex items-center gap-2 border border-blue-400/40">
+        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span x-text="(task.progress || 10) + '%'"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 3. MODAL PUSH / PULL CLOUD (CHỈ HIỆN ĐÚNG APP ĐANG CÓ TRÊN CLOUD KHI PULL) -->
+  <div x-show="cloudModal.open" x-transition.opacity
+       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div @click.away="cloudModal.open = false"
+         class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl flex items-center justify-center"
+               :class="cloudModal.mode === 'push' ? 'bg-blue-500/15 text-blue-500' : 'bg-purple-500/15 text-purple-500'">
+            <svg x-show="cloudModal.mode === 'push'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+            </svg>
+            <svg x-show="cloudModal.mode === 'pull'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-bold" x-text="cloudModal.mode === 'push' ? t('pushModalTitle') : t('pullModalTitle')"></h3>
+        </div>
+        <button @click="cloudModal.open = false" class="p-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400"
+         x-text="cloudModal.mode === 'push' ? t('pushModalDesc') : t('pullModalDesc')"></p>
+
+      <!-- Trạng thái đang kiểm tra dữ liệu thực tế trên Cloud -->
+      <div x-show="cloudModal.loadingList" class="py-4 flex items-center justify-center gap-2 text-xs text-purple-400">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span x-text="t('checkingCloudData')"></span>
+      </div>
+
+      <!-- Nếu không có bản lưu nào trên Cloud/SSD -->
+      <div x-show="!cloudModal.loadingList && cloudModal.availableApps.length === 0"
+           class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs text-center"
+           x-text="cloudModal.mode === 'push' ? t('noSsdAppsToPush') : t('noCloudAppsToPull')">
+      </div>
+
+      <!-- Dropdown chỉ hiển thị các App thực sự có dữ liệu -->
+      <div x-show="!cloudModal.loadingList && cloudModal.availableApps.length > 0" class="space-y-1.5">
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400" x-text="t('selectTargetApp')"></label>
+        <select x-model="cloudModal.targetApp"
+                class="w-full h-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm font-semibold">
+          <option value="ALL" x-text="t('allAvailableOption') + ' (' + cloudModal.availableApps.length + ' apps)'"></option>
+          <template x-for="name in cloudModal.availableApps" :key="name">
+            <option :value="name" x-text="name"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-2">
+        <button @click="cloudModal.open = false"
+                class="h-10 rounded-xl border border-slate-200 dark:border-darkborder text-xs font-semibold"
+                x-text="t('cancelBtn')">
+        </button>
+        <button @click="confirmCloudModal()"
+                :disabled="cloudModal.loadingList || cloudModal.availableApps.length === 0"
+                class="h-10 rounded-xl text-white text-xs font-semibold shadow-sm disabled:opacity-40"
+                :class="cloudModal.mode === 'push' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-purple-600 hover:bg-purple-500'"
+                x-text="cloudModal.mode === 'push' ? t('startPushBtn') : t('startPullBtn')">
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. MODAL CHỌN NGUỒN KHÔI PHỤC (SSD HAY CLOUD) -->
+  <div x-show="restoreModal.open" x-transition.opacity
+       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div @click.away="restoreModal.open = false"
+         class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold" x-text="t('restoreModalTitle')"></h3>
+        <button @click="restoreModal.open = false" class="p-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="bg-slate-50 dark:bg-slate-900/70 rounded-2xl p-3 text-xs space-y-1 border border-slate-200/60 dark:border-darkborder">
+        <div class="font-bold text-emerald-500 text-sm" x-text="restoreModal.snap?.app_name"></div>
+        <div class="text-slate-500 dark:text-slate-400" x-text="restoreModal.snap?.timestamp_str + ' • ' + restoreModal.snap?.size_mb + ' MB'"></div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400" x-text="t('chooseRestoreSource')"></label>
+
+        <button type="button"
+                @click="if(restoreModal.snap?.on_ssd) restoreModal.source = 'ssd'"
+                :disabled="!restoreModal.snap?.on_ssd"
+                class="w-full p-3 rounded-2xl border text-left flex items-center justify-between transition"
+                :class="restoreModal.source === 'ssd'
+                  ? 'border-blue-500 bg-blue-500/10'
+                  : (restoreModal.snap?.on_ssd ? 'border-slate-200 dark:border-darkborder' : 'opacity-40 cursor-not-allowed border-slate-200 dark:border-darkborder')">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center">
+              <!-- Symmetric 3-bar SSD Icon -->
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/>
+                <rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/>
+                <rect x="3" y="16" width="18" height="4.5" rx="1.5"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-xs font-bold" x-text="t('sourceSsdTitle')"></div>
+              <div class="text-[11px] text-slate-400" x-text="restoreModal.snap?.on_ssd ? t('sourceSsdFast') : t('notAvailableSsd')"></div>
+            </div>
+          </div>
+          <div class="w-4 h-4 rounded-full border flex items-center justify-center"
+               :class="restoreModal.source === 'ssd' ? 'border-blue-500 bg-blue-500' : 'border-slate-500'">
+            <div x-show="restoreModal.source === 'ssd'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
+          </div>
+        </button>
+
+        <button type="button"
+                @click="if(restoreModal.snap?.on_cloud) restoreModal.source = 'cloud'"
+                :disabled="!restoreModal.snap?.on_cloud"
+                class="w-full p-3 rounded-2xl border text-left flex items-center justify-between transition"
+                :class="restoreModal.source === 'cloud'
+                  ? 'border-purple-500 bg-purple-500/10'
+                  : (restoreModal.snap?.on_cloud ? 'border-slate-200 dark:border-darkborder' : 'opacity-40 cursor-not-allowed border-slate-200 dark:border-darkborder')">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-500 flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-xs font-bold" x-text="t('sourceCloudTitle')"></div>
+              <div class="text-[11px] text-slate-400" x-text="restoreModal.snap?.on_cloud ? t('sourceCloudDesc') : t('notAvailableCloud')"></div>
+            </div>
+          </div>
+          <div class="w-4 h-4 rounded-full border flex items-center justify-center"
+               :class="restoreModal.source === 'cloud' ? 'border-purple-500 bg-purple-500' : 'border-slate-500'">
+            <div x-show="restoreModal.source === 'cloud'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
+          </div>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-2">
+        <button @click="restoreModal.open = false"
+                class="h-10 rounded-xl border border-slate-200 dark:border-darkborder text-xs font-semibold"
+                x-text="t('cancelBtn')">
+        </button>
+        <button @click="confirmRestoreModal()"
+                class="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm"
+                x-text="t('confirmRestoreBtn')">
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. MODAL CHỌN NƠI XÓA -->
+  <div x-show="deleteModal.open" x-transition.opacity
+       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div @click.away="deleteModal.open = false"
+         class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <h3 class="text-base font-bold text-rose-500" x-text="t('deleteModalTitle')"></h3>
+      <p class="text-xs text-slate-400" x-text="deleteModal.snap?.app_name + ' (' + deleteModal.snap?.timestamp_str + ')'"></p>
+
+      <div class="space-y-2">
+        <button x-show="deleteModal.snap?.on_ssd && deleteModal.snap?.on_cloud"
+                @click="confirmDelete('both')"
+                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
+                x-text="t('deleteBoth')">
+        </button>
+        <button x-show="deleteModal.snap?.on_ssd"
+                @click="confirmDelete('ssd')"
+                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold"
+                x-text="t('deleteSsdOnly')">
+        </button>
+        <button x-show="deleteModal.snap?.on_cloud"
+                @click="confirmDelete('cloud')"
+                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold"
+                x-text="t('deleteCloudOnly')">
+        </button>
+        <button @click="deleteModal.open = false"
+                class="w-full h-10 rounded-xl text-xs font-semibold text-slate-400"
+                x-text="t('cancelBtn')">
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <div class="max-w-3xl mx-auto px-4 pt-4 space-y-4">
+
+    <!-- TOP BAR -->
+    <header class="flex items-center justify-between gap-3 bg-white/90 dark:bg-darkcard/90 backdrop-blur-md border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 shadow-sm">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h1 class="text-base font-bold tracking-tight truncate">CasaOS Backup</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="t('subtitle')"></p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <button @click="toggleLang()"
+                class="h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap inline-flex items-center justify-center gap-1.5 border border-slate-200 dark:border-darkborder bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition">
+          <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/>
+          </svg>
+          <span x-text="lang.toUpperCase()"></span>
+        </button>
+
+        <button @click="toggleTheme()"
+                class="w-9 h-9 rounded-xl inline-flex items-center justify-center border border-slate-200 dark:border-darkborder bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                :title="t('theme')">
+          <svg x-show="darkMode" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+          </svg>
+          <svg x-show="!darkMode" class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2x2 STATS CARDS (Icon SSD 3 vạch cân đối tuyệt đối) -->
+    <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statApps')"></span>
+          <div class="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="text-xl font-bold tracking-tight leading-none" x-text="data.containers.length"></div>
+          <div class="text-[11px] text-slate-400 mt-1 truncate" x-text="runningCount() + ' ' + t('running')"></div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statBackups')"></span>
+          <div class="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="text-xl font-bold tracking-tight leading-none" x-text="data.backups.length"></div>
+          <div class="text-[11px] text-slate-400 mt-1 truncate" x-text="data.disk.backup_size_mb + ' MB'"></div>
+        </div>
+      </div>
+
+      <!-- Free SSD Card với Icon 3 tầng cân đối -->
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statStorage')"></span>
+          <div class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/>
+              <rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/>
+              <rect x="3" y="16" width="18" height="4.5" rx="1.5"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="text-xl font-bold tracking-tight leading-none" x-text="data.disk.free_gb + ' GB'"></div>
+          <div class="text-[11px] text-slate-400 mt-1 truncate" x-text="'AppData: ' + data.disk.appdata_size_mb + ' MB'"></div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statCloud')"></span>
+          <div class="w-6 h-6 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <div class="text-sm font-bold tracking-tight uppercase leading-none truncate" x-text="formatMode(data.settings.backup_mode)"></div>
+          <div class="text-[11px] text-slate-400 mt-1.5 truncate" x-text="data.rclone.configured ? t('cloudConnected') : t('cloudNotSet')"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEGMENTED TABS -->
+    <nav class="grid grid-cols-3 gap-1 bg-slate-200/80 dark:bg-darkcard p-1 rounded-2xl border border-slate-200/60 dark:border-darkborder">
+      <button @click="activeTab = 'apps'"
+              class="py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              :class="activeTab === 'apps' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+        </svg>
+        <span x-text="t('tabApps')"></span>
+        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400" x-text="data.containers.length"></span>
+      </button>
+
+      <button @click="activeTab = 'restore'"
+              class="py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              :class="activeTab === 'restore' ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+        </svg>
+        <span x-text="t('tabRestore')"></span>
+        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" x-text="data.backups.length"></span>
+      </button>
+
+      <button @click="activeTab = 'settings'"
+              class="py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 relative"
+              :class="activeTab === 'settings' ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span x-text="t('tabSettings')"></span>
+        <span x-show="isSettingsDirty()" class="w-2 h-2 rounded-full bg-blue-500"></span>
+      </button>
+    </nav>
+
+    <!-- ================= TAB 1: APPLICATIONS ================= -->
+    <section x-show="activeTab === 'apps'" class="space-y-3">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400" x-text="t('appListTitle')"></h2>
+        <button @click="runBackup('ALL')" :disabled="task.active"
+                class="h-9 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+          </svg>
+          <span x-text="t('backupAll')"></span>
+        </button>
+      </div>
+
+      <div class="space-y-2.5">
+        <template x-for="app in data.containers" :key="app.id">
+          <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-4 shadow-sm transition">
+            <div class="flex items-center justify-between gap-2.5">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 flex-nowrap min-w-0">
+                  <span class="w-2 h-2 rounded-full shrink-0" :class="app.status === 'running' ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                  <h3 class="font-bold text-sm sm:text-base truncate" x-text="app.name"></h3>
+
+                  <!-- Compact SSD Pill (Symmetric 3-bar icon) -->
+                  <template x-if="app.has_ssd">
+                    <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                      <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="3" y="3.5" width="18" height="4.5" rx="1.2"/>
+                        <rect x="3" y="9.75" width="18" height="4.5" rx="1.2"/>
+                        <rect x="3" y="16" width="18" height="4.5" rx="1.2"/>
+                      </svg>
+                      <span x-text="app.ssd_count"></span>
+                    </span>
+                  </template>
+
+                  <!-- Compact Cloud Pill -->
+                  <template x-if="app.has_cloud">
+                    <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+                      </svg>
+                      <span x-text="app.cloud_count"></span>
+                    </span>
+                  </template>
+                </div>
+
+                <div class="flex items-center gap-2 mt-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <span class="truncate" x-text="t('lastBackup') + ': ' + (app.latest_backup === 'Chưa có' ? t('none') : app.latest_backup)"></span>
+                  <span>•</span>
+                  <button @click="toggleAppDetail(app.id)" class="text-blue-500 hover:underline font-medium shrink-0">
+                    <span x-text="openDetails[app.id] ? t('hidePaths') : t('viewPaths') + ' (' + app.data_mounts.length + ')'"></span>
+                  </button>
+                </div>
+              </div>
+
+              <button @click="runBackup(app.name)" :disabled="task.active"
+                      class="shrink-0 h-9 bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:hover:bg-blue-600 disabled:opacity-50 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 rounded-xl border border-slate-200 dark:border-slate-700 transition inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+                </svg>
+                <span x-text="t('backupNow')"></span>
+              </button>
+            </div>
+
+            <div x-show="openDetails[app.id]" x-transition class="mt-3 pt-3 border-t border-slate-100 dark:border-darkborder text-xs space-y-1.5 text-slate-500 dark:text-slate-400">
+              <div class="flex flex-wrap items-center gap-2 text-[11px]">
+                <span class="font-semibold">Image:</span>
+                <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800" x-text="app.image"></code>
+                <span class="font-semibold ml-1" x-text="t('network') + ':'"></span>
+                <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800" x-text="app.network_mode"></code>
+              </div>
+              <template x-if="app.data_mounts.length === 0">
+                <div class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[11px]">
+                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+                  </svg>
+                  <span x-text="t('configOnlyNote')"></span>
+                </div>
+              </template>
+              <template x-for="m in app.data_mounts" :key="m.source">
+                <div class="flex items-center gap-2 font-mono text-[11px] bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-lg break-all">
+                  <svg class="w-3.5 h-3.5 shrink-0 text-blue-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+                  </svg>
+                  <span><span class="text-slate-700 dark:text-slate-300" x-text="m.source"></span> → <span x-text="m.destination"></span></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- ================= TAB 2: RESTORE & SNAPSHOTS ================= -->
+    <section x-show="activeTab === 'restore'" class="space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-1">
+        <div class="flex items-center justify-between sm:justify-start gap-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400" x-text="t('restoreTitle')"></h2>
+          <select x-model="filterApp" class="h-8 text-xs bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-xl px-2.5">
+            <option value="ALL" x-text="t('allApps')"></option>
+            <template x-for="name in data.app_names" :key="name">
+              <option :value="name" x-text="name"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 sm:flex items-center gap-2">
+          <button @click="openCloudDialog('push')" :disabled="task.active"
+                  class="h-9 bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 text-xs font-semibold px-3.5 rounded-xl transition inline-flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+            </svg>
+            <span x-text="t('pushCloud')"></span>
+          </button>
+          <button @click="openCloudDialog('pull')" :disabled="task.active"
+                  class="h-9 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+            </svg>
+            <span x-text="t('pullCloud')"></span>
+          </button>
+        </div>
+      </div>
+
+      <template x-if="filteredBackups().length === 0">
+        <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-10 text-center text-sm text-slate-400" x-text="t('noBackups')"></div>
+      </template>
+
+      <div class="space-y-3">
+        <template x-for="b in filteredBackups()" :key="b.app_name + b.version_id">
+          <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-4 shadow-sm space-y-3">
+
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold text-base text-emerald-600 dark:text-emerald-400 truncate" x-text="b.app_name"></span>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <template x-if="b.on_ssd">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <rect x="3" y="3.5" width="18" height="4.5" rx="1.2"/>
+                      <rect x="3" y="9.75" width="18" height="4.5" rx="1.2"/>
+                      <rect x="3" y="16" width="18" height="4.5" rx="1.2"/>
+                    </svg>
+                    <span>SSD</span>
+                  </span>
+                </template>
+
+                <template x-if="b.on_cloud">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+                    </svg>
+                    <span>Cloud</span>
+                  </span>
+                </template>
+
+                <template x-if="b.encrypted">
+                  <span class="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold inline-flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
+                    </svg>
+                    <span>AES</span>
+                  </span>
+                </template>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium" x-text="b.timestamp_str"></span>
+                <span class="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500 dark:text-blue-400 font-semibold" x-text="b.size_mb + ' MB'"></span>
+              </div>
+              <div class="text-[11px] font-mono text-slate-500 truncate max-w-[200px] sm:max-w-xs" x-text="b.image + ' • ' + (b.sha256 ? b.sha256.substring(0, 8) : '')"></div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-darkborder/80">
+              <button @click="openRestoreDialog(b)" :disabled="task.active"
+                      class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-4 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                </svg>
+                <span x-text="t('restoreBtn')"></span>
+              </button>
+
+              <button @click="openDeleteDialog(b)" :disabled="task.active"
+                      class="h-9 px-3 rounded-xl inline-flex items-center justify-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/25 text-xs font-semibold transition shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                </svg>
+                <span x-text="t('deleteBtn')"></span>
+              </button>
+            </div>
+
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- ================= TAB 3: SETTINGS ================= -->
+    <section x-show="activeTab === 'settings'" class="space-y-4">
+
+      <!-- Group 1: Policy -->
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-darkborder pb-2.5">
+          <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/>
+          </svg>
+          <h3 class="text-sm font-bold" x-text="t('policySection')"></h3>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('backupMode')"></label>
+            <select x-model="data.settings.backup_mode"
+                    class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm">
+              <option value="local" x-text="t('modeLocal')"></option>
+              <option value="local_cloud" x-text="t('modeLocalCloud')"></option>
+              <option value="cloud" x-text="t('modeCloud')"></option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('retentionLabel')"></label>
+            <input type="number" min="1" max="50" x-model.number="data.settings.retention_count"
+                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm" />
+            <p class="text-[11px] text-slate-400 mt-1" x-text="t('retentionHint')"></p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-darkborder">
+          <div class="pr-4">
+            <div class="text-xs sm:text-sm font-semibold" x-text="t('recreateLabel')"></div>
+            <div class="text-[11px] text-slate-400 mt-0.5" x-text="t('recreateDesc')"></div>
+          </div>
+          <button type="button" @click="recreateContainer = !recreateContainer"
+                  class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
+                  :class="recreateContainer ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
+            <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="recreateContainer ? 'translate-x-5' : 'translate-x-0'"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Group 2: Automation & Security -->
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-darkborder pb-2.5">
+          <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+          </svg>
+          <h3 class="text-sm font-bold" x-text="t('scheduleSecuritySection')"></h3>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold" x-text="t('autoSchedule')"></span>
+              <button type="button" @click="data.settings.schedule_enabled = !data.settings.schedule_enabled"
+                      class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
+                      :class="data.settings.schedule_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
+                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                      :class="data.settings.schedule_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
+              </button>
+            </div>
+            <input type="text" x-model="data.settings.schedule" placeholder="0 3 * * *"
+                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
+            <p class="text-[11px] text-slate-400" x-text="t('cronHint')"></p>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold" x-text="t('encryptionLabel')"></span>
+              <button type="button" @click="data.settings.encryption_enabled = !data.settings.encryption_enabled"
+                      class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
+                      :class="data.settings.encryption_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
+                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                      :class="data.settings.encryption_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
+              </button>
+            </div>
+            <input type="password" x-model="data.settings.encryption_password" :placeholder="t('passwordPlaceholder')"
+                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs" />
+            <p class="text-[11px] text-slate-400" x-text="t('encHint')"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Group 3: Cloud Rclone & 1-Tap Recovery Key -->
+      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-darkborder pb-2.5">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+            </svg>
+            <h3 class="text-sm font-bold" x-text="t('cloudSection')"></h3>
+          </div>
+          <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
+                :class="data.rclone.configured ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'"
+                x-text="data.rclone.configured ? t('cloudConnected') + ' (' + data.rclone.remotes.join(', ') + ')' : t('cloudNotSet')"></span>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('remotePathLabel')"></label>
+            <div class="flex gap-2">
+              <input type="text" x-model="data.settings.rclone_remote" placeholder="gdrive:CasaOS_Backups"
+                     class="flex-1 h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
+              <button @click="showRcloneEditor = !showRcloneEditor"
+                      class="h-10 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 transition whitespace-nowrap"
+                      x-text="t('editRcloneBtn')">
+              </button>
+            </div>
+          </div>
+
+          <div x-show="showRcloneEditor" x-transition class="space-y-2 pt-2">
+            <label class="block text-xs text-slate-400"><code>/root/.config/rclone/rclone.conf</code></label>
+            <textarea x-model="data.rclone.config_text" rows="5"
+                      class="w-full bg-slate-950 text-emerald-400 border border-slate-700 rounded-xl p-3 text-xs font-mono"></textarea>
+            <div class="flex justify-end">
+              <button @click="saveRcloneConfig()" class="h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 rounded-xl">
+                <span x-text="t('saveRcloneBtn')"></span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 1-Tap Recovery Key (Dùng khi cài lại máy mới không cần đăng nhập lại Google) -->
+          <div class="pt-3 border-t border-slate-100 dark:border-darkborder space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-bold text-purple-400" x-text="t('recoveryKeyTitle')"></div>
+                <div class="text-[11px] text-slate-400" x-text="t('recoveryKeyDesc')"></div>
+              </div>
+              <div class="flex gap-1.5 shrink-0">
+                <button @click="copyRecoveryKey()"
+                        class="h-8 px-2.5 rounded-lg bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 text-[11px] font-semibold border border-purple-500/30 transition"
+                        x-text="t('exportKeyBtn')">
+                </button>
+                <button @click="showImportKey = !showImportKey"
+                        class="h-8 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 transition"
+                        x-text="t('importKeyBtn')">
+                </button>
+              </div>
+            </div>
+
+            <div x-show="showImportKey" x-transition class="flex gap-2 pt-1">
+              <input type="text" x-model="importKeyText" placeholder="CBMKEY:ey..."
+                     class="flex-1 h-9 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
+              <button @click="applyRecoveryKey()"
+                      class="h-9 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-3.5 rounded-xl shrink-0"
+                      x-text="t('applyKeyBtn')">
+              </button>
+            </div>
+          </div>
+
+          <div class="text-xs text-slate-400 flex items-center justify-between pt-1">
+            <span><span x-text="t('lastSync')"></span>: <b class="text-slate-600 dark:text-slate-300" x-text="data.settings.last_cloud_sync"></b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SMART SAVE BUTTON -->
+      <div class="flex justify-end pt-1">
+        <button @click="saveSettings()"
+                :disabled="!isSettingsDirty() || savingSettings"
+                class="w-full sm:w-auto h-11 text-xs sm:text-sm font-semibold px-6 rounded-2xl transition-all duration-200 inline-flex items-center justify-center gap-2"
+                :class="isSettingsDirty()
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 cursor-pointer'
+                  : 'bg-slate-200 dark:bg-slate-800/70 text-slate-400 dark:text-slate-500 border border-slate-300/50 dark:border-slate-700/50 opacity-60 cursor-not-allowed'">
+          <svg x-show="!savingSettings" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+          </svg>
+          <svg x-show="savingSettings" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span x-text="savingSettings ? t('processing') : (isSettingsDirty() ? t('saveSettingsBtn') : t('noChangesBtn'))"></span>
+        </button>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const I18N = {
+      vi: {
+        subtitle: 'Sao lưu & Phục hồi độc lập',
+        theme: 'Đổi giao diện Sáng/Tối',
+        close: 'Đóng',
+        hideProgress: 'Thu gọn',
+        cancelTaskBtn: 'Hủy',
+        statApps: 'Ứng dụng',
+        running: 'đang chạy',
+        statBackups: 'Bản sao lưu',
+        statStorage: 'SSD trống',
+        statCloud: 'Chế độ lưu',
+        cloudConnected: 'Đã kết nối Cloud',
+        cloudNotSet: 'Chưa kết nối',
+        tabApps: 'Ứng dụng',
+        tabRestore: 'Khôi phục',
+        tabSettings: 'Cài đặt',
+        appListTitle: 'Danh sách Container',
+        backupAll: 'Sao lưu tất cả',
+        processing: 'Đang xử lý...',
+        lastBackup: 'Lần cuối',
+        none: 'Chưa có',
+        viewPaths: 'Chi tiết',
+        hidePaths: 'Thu gọn',
+        backupNow: 'Sao lưu',
+        network: 'Mạng',
+        configOnlyNote: 'Container không gắn thư mục ngoài (Đã sao lưu Cmd, Token & Env)',
+        restoreTitle: 'Danh sách bản sao lưu',
+        allApps: 'Tất cả ứng dụng',
+        pushCloud: 'Đẩy lên Cloud',
+        pullCloud: 'Tải từ Cloud',
+        pushModalTitle: 'Đẩy bản lưu lên Cloud',
+        pullModalTitle: 'Tải bản lưu từ Cloud',
+        pushModalDesc: 'Chỉ hiển thị các ứng dụng đang có bản sao lưu trên SSD nội bộ:',
+        pullModalDesc: 'Chỉ hiển thị các ứng dụng thực sự đang có bản sao lưu trên Cloud:',
+        checkingCloudData: 'Đang kiểm tra dữ liệu trên Cloud...',
+        noSsdAppsToPush: 'Chưa có bản sao lưu nào trên SSD để đẩy lên Cloud.',
+        noCloudAppsToPull: 'Không tìm thấy bản sao lưu nào trên Cloud.',
+        selectTargetApp: 'Chọn ứng dụng:',
+        allAvailableOption: 'Tất cả ứng dụng hiện có',
+        startPushBtn: 'Đẩy lên Cloud',
+        startPullBtn: 'Tải về SSD',
+        noBackups: 'Chưa có bản sao lưu nào.',
+        restoreBtn: 'Phục hồi ứng dụng',
+        deleteBtn: 'Xóa',
+        restoreModalTitle: 'Khôi phục Ứng dụng',
+        chooseRestoreSource: 'Chọn nguồn dữ liệu khôi phục:',
+        sourceSsdTitle: 'Khôi phục từ SSD nội bộ',
+        sourceSsdFast: 'Tốc độ cao, không cần Internet',
+        notAvailableSsd: 'Bản này không có trên SSD',
+        sourceCloudTitle: 'Tải & Khôi phục từ Cloud',
+        sourceCloudDesc: 'Kéo gói sao lưu từ Google Drive/OneDrive về máy',
+        notAvailableCloud: 'Bản này chưa được đồng bộ lên Cloud',
+        cancelBtn: 'Hủy',
+        confirmRestoreBtn: 'Bắt đầu Phục hồi',
+        deleteModalTitle: 'Xóa bản sao lưu',
+        deleteBoth: 'Xóa trên cả SSD & Cloud',
+        deleteSsdOnly: 'Chỉ xóa trên SSD (Giữ bản trên Cloud)',
+        deleteCloudOnly: 'Chỉ xóa trên Cloud (Giữ bản trên SSD)',
+        policySection: 'Chính sách Sao lưu & Khôi phục',
+        backupMode: 'Chế độ lưu trữ',
+        modeLocal: 'Chỉ lưu trên SSD nội bộ (Local)',
+        modeLocalCloud: 'Lưu SSD + Tự động đẩy lên Cloud',
+        modeCloud: 'Chỉ lưu trên Cloud (Xóa bản SSD sau khi tải lên)',
+        retentionLabel: 'Số bản lưu giữ lại tối đa / ứng dụng',
+        retentionHint: 'Tự động xóa bản cũ vượt quá số lượng này trên cả SSD và Cloud',
+        recreateLabel: 'Tái tạo lại Container khi khôi phục',
+        recreateDesc: 'Bật khi khôi phục trên máy mới cài lại hoặc cần dựng lại cấu hình mạng/biến môi trường.',
+        scheduleSecuritySection: 'Lịch tự động & Bảo mật',
+        autoSchedule: 'Tự động sao lưu theo lịch (Cron)',
+        cronHint: 'Ví dụ: 0 3 * * * (03:00 sáng mỗi ngày cho cả SSD & Cloud)',
+        encryptionLabel: 'Mã hóa bản sao lưu (AES-256)',
+        passwordPlaceholder: 'Mật khẩu mã hóa / giải mã...',
+        encHint: 'Bảo vệ dữ liệu trước khi tải lên Google Drive / OneDrive',
+        cloudSection: 'Kết nối Đám mây (Rclone)',
+        remotePathLabel: 'Thư mục đích trên Cloud',
+        editRcloneBtn: 'Sửa rclone.conf',
+        saveRcloneBtn: 'Lưu rclone.conf',
+        recoveryKeyTitle: 'Khóa Khôi Phục Nhanh (1-Tap Recovery Key)',
+        recoveryKeyDesc: 'Sao chép khóa này lưu vào Ghi chú iPhone để khi cài lại máy mới không cần đăng nhập lại Google Drive.',
+        exportKeyBtn: 'Sao chép Khóa',
+        importKeyBtn: 'Dán Khóa',
+        applyKeyBtn: 'Khôi phục',
+        lastSync: 'Đồng bộ lần cuối',
+        saveSettingsBtn: 'Lưu thay đổi',
+        noChangesBtn: 'Đã lưu mọi thay đổi'
+      },
+      en: {
+        subtitle: 'Self-contained Backup & Recovery',
+        theme: 'Toggle Light/Dark Mode',
+        close: 'Close',
+        hideProgress: 'Minimize',
+        cancelTaskBtn: 'Cancel',
+        statApps: 'Applications',
+        running: 'running',
+        statBackups: 'Snapshots',
+        statStorage: 'Free SSD',
+        statCloud: 'Backup Mode',
+        cloudConnected: 'Cloud Ready',
+        cloudNotSet: 'Not configured',
+        tabApps: 'Apps',
+        tabRestore: 'Backups',
+        tabSettings: 'Settings',
+        appListTitle: 'Discovered Containers',
+        backupAll: 'Backup All',
+        processing: 'Working...',
+        lastBackup: 'Latest',
+        none: 'Never',
+        viewPaths: 'Details',
+        hidePaths: 'Hide',
+        backupNow: 'Backup',
+        network: 'Network',
+        configOnlyNote: 'Stateless container (Backs up Cmd, Token, Env & Network spec)',
+        restoreTitle: 'Available Snapshots',
+        allApps: 'All applications',
+        pushCloud: 'Push Cloud',
+        pullCloud: 'Pull Cloud',
+        pushModalTitle: 'Push Snapshots to Cloud',
+        pullModalTitle: 'Pull Snapshots from Cloud',
+        pushModalDesc: 'Showing only containers that have local SSD snapshots ready to upload:',
+        pullModalDesc: 'Showing only containers that actually have snapshots stored on Cloud:',
+        checkingCloudData: 'Checking Cloud storage...',
+        noSsdAppsToPush: 'No local snapshots found on SSD to push.',
+        noCloudAppsToPull: 'No snapshots found on Cloud storage.',
+        selectTargetApp: 'Select container:',
+        allAvailableOption: 'All Available',
+        startPushBtn: 'Push Now',
+        startPullBtn: 'Pull Now',
+        noBackups: 'No backups available yet.',
+        restoreBtn: 'Restore Snapshot',
+        deleteBtn: 'Delete',
+        restoreModalTitle: 'Restore Application',
+        chooseRestoreSource: 'Select restore source:',
+        sourceSsdTitle: 'Restore from Local SSD',
+        sourceSsdFast: 'Fast recovery, no internet required',
+        notAvailableSsd: 'Not available on Local SSD',
+        sourceCloudTitle: 'Download & Restore from Cloud',
+        sourceCloudDesc: 'Fetch snapshot directly from Cloud remote',
+        notAvailableCloud: 'Not synced to Cloud yet',
+        cancelBtn: 'Cancel',
+        confirmRestoreBtn: 'Start Restore',
+        deleteModalTitle: 'Delete Snapshot',
+        deleteBoth: 'Delete from both SSD & Cloud',
+        deleteSsdOnly: 'Delete from SSD only (Keep on Cloud)',
+        deleteCloudOnly: 'Delete from Cloud only (Keep on SSD)',
+        policySection: 'Backup & Restore Policy',
+        backupMode: 'Storage Mode',
+        modeLocal: 'Local SSD Only',
+        modeLocalCloud: 'Local SSD + Auto Cloud Sync',
+        modeCloud: 'Cloud Only (Remove local after upload)',
+        retentionLabel: 'Max versions kept per app',
+        retentionHint: 'Auto-prunes older versions on both Local SSD and Cloud',
+        recreateLabel: 'Recreate Container on Restore',
+        recreateDesc: 'Enable for fresh CasaOS installs or to restore network/env specs.',
+        scheduleSecuritySection: 'Automation & Security',
+        autoSchedule: 'Scheduled Auto-Backup (Cron)',
+        cronHint: 'Example: 0 3 * * * (Daily at 3:00 AM for SSD & Cloud)',
+        encryptionLabel: 'Encrypt Archives (AES-256)',
+        passwordPlaceholder: 'Encryption password...',
+        encHint: 'Protects archives before uploading to Cloud',
+        cloudSection: 'Cloud Storage (Rclone)',
+        remotePathLabel: 'Remote Destination Path',
+        editRcloneBtn: 'Edit rclone.conf',
+        saveRcloneBtn: 'Save rclone.conf',
+        recoveryKeyTitle: '1-Tap Cloud Recovery Key',
+        recoveryKeyDesc: 'Save this key in iPhone Notes to restore Google Drive connection instantly on a fresh install.',
+        exportKeyBtn: 'Copy Key',
+        importKeyBtn: 'Paste Key',
+        applyKeyBtn: 'Restore',
+        lastSync: 'Last Cloud Sync',
+        saveSettingsBtn: 'Save Changes',
+        noChangesBtn: 'All Changes Saved'
+      }
+    };
+
+    function backupManager() {
+      return {
+        lang: localStorage.getItem('cbm_lang') || 'vi',
+        darkMode: (localStorage.getItem('cbm_theme') || 'dark') === 'dark',
+        activeTab: 'apps',
+        filterApp: 'ALL',
+        openDetails: {},
+        savingSettings: false,
+        progressMinimized: false,
+        pollTimer: null,
+        recreateContainer: localStorage.getItem('cbm_recreate') === 'true',
+        savedRecreateContainer: localStorage.getItem('cbm_recreate') === 'true',
+        originalSettingsJson: '',
+        showRcloneEditor: false,
+        showImportKey: false,
+        importKeyText: '',
+        toast: { message: '', type: 'success' },
+        task: { active: false, title: '', detail: '', progress: 0, status: 'idle' },
+        cloudModal: { open: false, mode: 'push', targetApp: 'ALL', availableApps: [], loadingList: false },
+        restoreModal: { open: false, snap: null, source: 'ssd' },
+        deleteModal: { open: false, snap: null },
+        data: {
+          disk: { free_gb: 0, appdata_size_mb: 0, backup_size_mb: 0 },
+          containers: [],
+          app_names: [],
+          ssd_apps: [],
+          cloud_apps: [],
+          backups: [],
+          settings: { backup_mode: 'local_cloud', retention_count: 5 },
+          rclone: { configured: false, remotes: [], config_text: '' }
+        },
+        initApp() {
+          this.applyTheme();
+          this.loadOverview(true);
+        },
+        t(key) {
+          return (I18N[this.lang] && I18N[this.lang][key]) || key;
+        },
+        toggleLang() {
+          this.lang = this.lang === 'vi' ? 'en' : 'vi';
+          localStorage.setItem('cbm_lang', this.lang);
+        },
+        toggleTheme() {
+          this.darkMode = !this.darkMode;
+          localStorage.setItem('cbm_theme', this.darkMode ? 'dark' : 'light');
+          this.applyTheme();
+        },
+        applyTheme() {
+          document.documentElement.classList.toggle('dark', this.darkMode);
+        },
+        runningCount() {
+          return this.data.containers.filter(c => c.status === 'running').length;
+        },
+        formatMode(mode) {
+          if (mode === 'local_cloud') return 'Local + Cloud';
+          return mode || 'Local';
+        },
+        toggleAppDetail(id) {
+          this.openDetails[id] = !this.openDetails[id];
+        },
+        filteredBackups() {
+          if (this.filterApp === 'ALL') return this.data.backups;
+          return this.data.backups.filter(b => b.app_name === this.filterApp);
+        },
+        snapshotSettingsState() {
+          const s = this.data.settings || {};
+          return JSON.stringify({
+            backup_mode: s.backup_mode,
+            retention_count: Number(s.retention_count),
+            schedule_enabled: Boolean(s.schedule_enabled),
+            schedule: s.schedule,
+            encryption_enabled: Boolean(s.encryption_enabled),
+            encryption_password: s.encryption_password,
+            rclone_remote: s.rclone_remote
+          });
+        },
+        isSettingsDirty() {
+          if (!this.originalSettingsJson) return false;
+          return this.snapshotSettingsState() !== this.originalSettingsJson || this.recreateContainer !== this.savedRecreateContainer;
+        },
+        showToast(msg, type = 'success') {
+          this.toast = { message: msg, type };
+          setTimeout(() => { this.toast.message = ''; }, 5000);
+        },
+        async parseResponse(res) {
+          const text = await res.text();
+          let json = {};
+          try { json = JSON.parse(text); } catch (e) { throw new Error(text || `HTTP ${res.status}`); }
+          if (!res.ok) throw new Error(json.detail || json.message || `Error ${res.status}`);
+          return json;
+        },
+        async loadOverview(refreshCloud = false) {
+          try {
+            const url = refreshCloud ? '/api/overview?refresh_cloud=true' : '/api/overview';
+            const res = await fetch(url);
+            const out = await this.parseResponse(res);
+            this.data = out;
+            this.originalSettingsJson = this.snapshotSettingsState();
+            if (out.task && out.task.active) {
+              this.task = out.task;
+              this.startPollingTask();
+            }
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        startPollingTask() {
+          if (this.pollTimer) clearInterval(this.pollTimer);
+          this.progressMinimized = false;
+          this.pollTimer = setInterval(async () => {
+            try {
+              const res = await fetch('/api/task-status');
+              const st = await res.json();
+              this.task = st;
+              if (!st.active) {
+                clearInterval(this.pollTimer);
+                this.pollTimer = null;
+                if (st.status === 'completed') {
+                  this.showToast(st.title + (st.detail ? ' — ' + st.detail : ''), 'success');
+                } else if (st.status === 'cancelled') {
+                  this.showToast(st.title, 'error');
+                } else if (st.status === 'error') {
+                  this.showToast(st.detail || st.title, 'error');
+                }
+                await this.loadOverview(false);
+              }
+            } catch (e) {
+              clearInterval(this.pollTimer);
+              this.pollTimer = null;
+            }
+          }, 1000);
+        },
+        async cancelRunningTask() {
+          try {
+            await fetch('/api/task/cancel', { method: 'POST' });
+            this.task.active = false;
+            this.showToast(this.lang === 'vi' ? 'Đã dừng tiến trình!' : 'Task cancelled!', 'error');
+            await this.loadOverview(false);
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        async runBackup(appName) {
+          try {
+            const res = await fetch(`/api/backup/${appName}`, { method: 'POST' });
+            await this.parseResponse(res);
+            this.task = { active: true, title: this.t('processing'), detail: appName, progress: 10 };
+            this.startPollingTask();
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        async openCloudDialog(mode) {
+          this.cloudModal.mode = mode;
+          this.cloudModal.targetApp = 'ALL';
+          this.cloudModal.open = true;
+
+          if (mode === 'push') {
+            this.cloudModal.loadingList = false;
+            this.cloudModal.availableApps = this.data.ssd_apps || [];
+          } else {
+            // Khi bấm Pull Cloud -> Quét trực tiếp từ Cloud xem có những file/app nào đang có trên Cloud
+            this.cloudModal.loadingList = true;
+            this.cloudModal.availableApps = this.data.cloud_apps || [];
+            try {
+              const res = await fetch('/api/cloud/apps');
+              const out = await this.parseResponse(res);
+              this.cloudModal.availableApps = out.apps || [];
+            } catch (e) {
+              // Giữ danh sách từ cache nếu lỗi
+            } finally {
+              this.cloudModal.loadingList = false;
+            }
+          }
+        },
+        async confirmCloudModal() {
+          const mode = this.cloudModal.mode;
+          const targetApp = this.cloudModal.targetApp;
+          this.cloudModal.open = false;
+
+          const endpoint = mode === 'push' ? '/api/cloud/sync-up' : '/api/cloud/pull-catalog';
+          try {
+            const res = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ app_name: targetApp })
+            });
+            await this.parseResponse(res);
+            this.task = {
+              active: true,
+              title: mode === 'push' ? 'Cloud Push...' : 'Cloud Pull...',
+              detail: targetApp,
+              progress: 15
+            };
+            this.startPollingTask();
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        openRestoreDialog(snap) {
+          this.restoreModal.snap = snap;
+          this.restoreModal.source = snap.on_ssd ? 'ssd' : 'cloud';
+          this.restoreModal.open = true;
+        },
+        async confirmRestoreModal() {
+          const snap = this.restoreModal.snap;
+          const source = this.restoreModal.source;
+          this.restoreModal.open = false;
+          if (!snap) return;
+
+          this.task = { active: true, title: `Restore ${snap.app_name}...`, detail: source.toUpperCase(), progress: 20 };
+          this.startPollingTask();
+          try {
+            const res = await fetch('/api/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                app_name: snap.app_name,
+                version_id: snap.version_id,
+                source: source,
+                recreate_container: this.recreateContainer
+              })
+            });
+            const out = await this.parseResponse(res);
+            this.showToast(out.message, 'success');
+            await this.loadOverview(false);
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        openDeleteDialog(snap) {
+          this.deleteModal.snap = snap;
+          this.deleteModal.open = true;
+        },
+        async confirmDelete(target) {
+          const snap = this.deleteModal.snap;
+          this.deleteModal.open = false;
+          if (!snap) return;
+          try {
+            const res = await fetch(`/api/backup/${snap.app_name}/${snap.version_id}?target=${target}`, { method: 'DELETE' });
+            await this.parseResponse(res);
+            this.showToast(this.lang === 'vi' ? 'Đã xóa bản sao lưu!' : 'Snapshot deleted!');
+            await this.loadOverview(false);
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        async saveSettings() {
+          if (!this.isSettingsDirty()) return;
+          this.savingSettings = true;
+          try {
+            localStorage.setItem('cbm_recreate', this.recreateContainer);
+            this.savedRecreateContainer = this.recreateContainer;
+            const res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.data.settings)
+            });
+            await this.parseResponse(res);
+            await this.loadOverview(false);
+            this.showToast(this.lang === 'vi' ? 'Đã lưu thay đổi thành công!' : 'Settings saved successfully!');
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          } finally {
+            this.savingSettings = false;
+          }
+        },
+        async saveRcloneConfig() {
+          try {
+            const res = await fetch('/api/rclone/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ config_text: this.data.rclone.config_text })
+            });
+            await this.parseResponse(res);
+            this.showToast(this.lang === 'vi' ? 'Đã lưu file rclone.conf!' : 'Saved rclone.conf!');
+            this.showRcloneEditor = false;
+            await this.loadOverview(true);
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        async copyRecoveryKey() {
+          try {
+            const res = await fetch('/api/recovery-key');
+            const out = await this.parseResponse(res);
+            await navigator.clipboard.writeText(out.recovery_key);
+            this.showToast(this.lang === 'vi' ? 'Đã sao chép Khóa Khôi Phục vào bộ nhớ tạm! Hãy dán vào Ghi chú iPhone.' : 'Recovery Key copied to clipboard! Save it in iPhone Notes.');
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
+        async applyRecoveryKey() {
+          if (!this.importKeyText.trim()) return;
+          try {
+            const res = await fetch('/api/recovery-key', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ recovery_key: this.importKeyText.trim() })
+            });
+            await this.parseResponse(res);
+            this.showImportKey = false;
+            this.importKeyText = '';
+            this.showToast(this.lang === 'vi' ? 'Đã khôi phục kết nối Google Drive & Cài đặt thành công!' : 'Cloud connection & settings restored!');
+            await this.loadOverview(true);
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
