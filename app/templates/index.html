@@ -189,9 +189,21 @@
         </button>
       </div>
 
-      <div class="bg-slate-50 dark:bg-slate-900/70 rounded-2xl p-3 text-xs space-y-1 border border-slate-200/60 dark:border-darkborder">
-        <div class="font-bold text-emerald-500 text-sm" x-text="restoreModal.snap?.app_name"></div>
-        <div class="text-slate-500 dark:text-slate-400" x-text="restoreModal.snap?.timestamp_str + ' • ' + restoreModal.snap?.size_mb + ' MB'"></div>
+      <div class="bg-slate-50 dark:bg-slate-900/70 rounded-2xl p-3.5 text-xs space-y-2.5 border border-slate-200/60 dark:border-darkborder">
+        <div class="flex items-center justify-between">
+          <div class="font-bold text-emerald-500 text-sm" x-text="restoreModal.snap?.app_name"></div>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                x-text="(restoreModal.versions?.length || 1) + ' ' + t('versionsCountLabel')"></span>
+        </div>
+        <div class="space-y-1">
+          <label class="block text-[11px] font-semibold text-slate-400" x-text="t('selectVersionLabel')"></label>
+          <select x-model="restoreModal.selectedVersionId" @change="onRestoreVersionChange()"
+                  class="w-full h-10 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 text-xs font-medium">
+            <template x-for="(v, idx) in restoreModal.versions" :key="v.version_id">
+              <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + v.size_mb + ' MB' + (idx === 0 ? ' (Latest)' : '')"></option>
+            </template>
+          </select>
+        </div>
       </div>
 
       <div class="space-y-2">
@@ -262,28 +274,49 @@
     </div>
   </div>
 
-  <!-- 5. MODAL CHỌN NƠI XÓA -->
+  <!-- 5. MODAL CHỌN NƠI XÓA (CÓ CHỌN PHIÊN BẢN & TRẠNG THÁI ĐANG XÓA) -->
   <div x-show="deleteModal.open" x-transition.opacity
        class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div @click.away="deleteModal.open = false"
+    <div @click.away="if(!deletingBackup) deleteModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-      <h3 class="text-base font-bold text-rose-500" x-text="t('deleteModalTitle')"></h3>
-      <p class="text-xs text-slate-400" x-text="deleteModal.snap?.app_name + ' (' + deleteModal.snap?.timestamp_str + ')'"></p>
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-rose-500" x-text="t('deleteModalTitle')"></h3>
+        <span class="text-xs font-bold text-emerald-500" x-text="deleteModal.snap?.app_name"></span>
+      </div>
 
-      <div class="space-y-2">
+      <div class="space-y-1">
+        <label class="block text-[11px] font-semibold text-slate-400" x-text="t('selectVersionLabel')"></label>
+        <select x-model="deleteModal.selectedVersionId" @change="onDeleteVersionChange()" :disabled="deletingBackup"
+                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-xs font-medium">
+          <template x-for="(v, idx) in deleteModal.versions" :key="v.version_id">
+            <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + v.size_mb + ' MB' + (idx === 0 ? ' (Latest)' : '')"></option>
+          </template>
+        </select>
+      </div>
+
+      <!-- Thanh tiến trình đang xóa -->
+      <div x-show="deletingBackup" class="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center gap-2.5 text-xs font-semibold text-rose-400">
+        <svg class="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span x-text="t('deletingProgress')"></span>
+      </div>
+
+      <div class="space-y-2" x-show="!deletingBackup">
         <button x-show="deleteModal.snap?.on_ssd && deleteModal.snap?.on_cloud"
                 @click="confirmDelete('both')"
-                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
+                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition"
                 x-text="t('deleteBoth')">
         </button>
         <button x-show="deleteModal.snap?.on_ssd"
                 @click="confirmDelete('ssd')"
-                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold"
+                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
                 x-text="t('deleteSsdOnly')">
         </button>
         <button x-show="deleteModal.snap?.on_cloud"
                 @click="confirmDelete('cloud')"
-                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold"
+                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
                 x-text="t('deleteCloudOnly')">
         </button>
         <button @click="deleteModal.open = false"
@@ -435,21 +468,53 @@
 
     <!-- ================= TAB 1: APPLICATIONS ================= -->
     <section x-show="activeTab === 'apps'" class="space-y-3">
-      <div class="flex items-center justify-between px-1">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400" x-text="t('appListTitle')"></h2>
-        <button @click="runBackup('ALL')" :disabled="task.active"
-                class="h-9 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
-          </svg>
-          <span x-text="t('backupAll')"></span>
-        </button>
+      <div class="flex items-center justify-between gap-2 px-1">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 truncate" x-text="t('appListTitle')"></h2>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <!-- Nút Bật/Tắt chế độ Chọn nhiều -->
+          <button @click="toggleSelectMode()" :disabled="task.active"
+                  class="h-9 px-3 rounded-xl text-xs font-semibold border transition inline-flex items-center gap-1.5"
+                  :class="selectMode ? 'bg-slate-200 dark:bg-slate-800 border-slate-400 dark:border-slate-600 text-slate-900 dark:text-white' : 'bg-white dark:bg-darkcard border-slate-200 dark:border-darkborder text-slate-600 dark:text-slate-300'">
+            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span x-text="selectMode ? t('cancelSelectBtn') : t('selectAppsBtn')"></span>
+          </button>
+
+          <!-- Nút Sao lưu các mục đã chọn (Hiện khi đang ở chế độ Select) -->
+          <button x-show="selectMode" @click="runSelectedBackups()" :disabled="task.active || selectedApps.length === 0"
+                  class="h-9 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+            </svg>
+            <span x-text="t('backupSelectedBtn') + ' (' + selectedApps.length + ')'"></span>
+          </button>
+
+          <!-- Nút Backup All mặc định -->
+          <button x-show="!selectMode" @click="runBackup('ALL')" :disabled="task.active"
+                  class="h-9 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+            </svg>
+            <span x-text="t('backupAll')"></span>
+          </button>
+        </div>
       </div>
 
       <div class="space-y-2.5">
         <template x-for="app in data.containers" :key="app.id">
-          <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-4 shadow-sm transition">
+          <div @click="if(selectMode) toggleSelectApp(app.name)"
+               class="bg-white dark:bg-darkcard border rounded-2xl p-4 shadow-sm transition"
+               :class="selectMode && selectedApps.includes(app.name) ? 'border-blue-500 ring-1 ring-blue-500/40 bg-blue-500/5 cursor-pointer' : (selectMode ? 'border-slate-200/80 dark:border-darkborder cursor-pointer' : 'border-slate-200/80 dark:border-darkborder')">
             <div class="flex items-center justify-between gap-2.5">
+              <div x-show="selectMode" class="shrink-0 pr-1">
+                <div class="w-5 h-5 rounded-lg border flex items-center justify-center transition"
+                     :class="selectedApps.includes(app.name) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-400 dark:border-slate-600 bg-slate-100 dark:bg-slate-800'">
+                  <svg x-show="selectedApps.includes(app.name)" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                  </svg>
+                </div>
+              </div>
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 flex-nowrap min-w-0">
                   <span class="w-2 h-2 rounded-full shrink-0" :class="app.status === 'running' ? 'bg-emerald-500' : 'bg-rose-500'"></span>
@@ -487,7 +552,7 @@
                 </div>
               </div>
 
-              <button @click="runBackup(app.name)" :disabled="task.active"
+              <button x-show="!selectMode" @click.stop="runBackup(app.name)" :disabled="task.active"
                       class="shrink-0 h-9 bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:hover:bg-blue-600 disabled:opacity-50 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 rounded-xl border border-slate-200 dark:border-slate-700 transition inline-flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
@@ -561,11 +626,15 @@
       </template>
 
       <div class="space-y-3">
-        <template x-for="b in filteredBackups()" :key="b.app_name + b.version_id">
+        <template x-for="b in filteredBackups()" :key="b.app_name">
           <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-4 shadow-sm space-y-3">
 
             <div class="flex items-center justify-between gap-2">
-              <span class="font-bold text-base text-emerald-600 dark:text-emerald-400 truncate" x-text="b.app_name"></span>
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-bold text-base text-emerald-600 dark:text-emerald-400 truncate" x-text="b.app_name"></span>
+                <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                      x-text="b.versions_count + ' ' + t('versionsCountLabel')"></span>
+              </div>
 
               <div class="flex items-center gap-1.5 shrink-0">
                 <template x-if="b.on_ssd">
@@ -698,6 +767,46 @@
             <input type="text" x-model="data.settings.schedule" placeholder="0 3 * * *"
                    class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
             <p class="text-[11px] text-slate-400" x-text="t('cronHint')"></p>
+                <div class="pt-2 space-y-1.5" x-show="data.settings.schedule_enabled">
+                  <p class="text-[11px] font-medium text-slate-400" x-text="t('autoBackupApps')"></p>
+                  <div class="flex flex-wrap gap-1.5 pt-0.5">
+                    <template x-for="c in data.containers" :key="c.name">
+                      <button type="button"
+                        @click="const ex = [...(data.settings.excluded_auto_apps || [])]; data.settings.excluded_auto_apps = ex.includes(c.name) ? ex.filter(x => x !== c.name) : [...ex, c.name]; data.settings = { ...data.settings }"
+                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all flex items-center gap-1.5"
+                        :class="!(data.settings.excluded_auto_apps || []).includes(c.name) ? 'bg-blue-600/15 border-blue-500/40 text-blue-400' : 'bg-slate-800/40 border-slate-700/50 text-slate-500 line-through opacity-60'">
+                        <span class="w-1.5 h-1.5 rounded-full" :class="!(data.settings.excluded_auto_apps || []).includes(c.name) ? 'bg-blue-400' : 'bg-slate-600'"></span>
+                        <span x-text="c.name"></span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+          <!-- Khung thiết lập riêng cho Home Assistant -->
+          <div class="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-blue-400" x-text="t('haScheduleTitle')"></span>
+              <button type="button" @click="data.settings.ha_schedule_enabled = !data.settings.ha_schedule_enabled; data.settings = { ...data.settings }"
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
+                :class="data.settings.ha_schedule_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
+                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                  :class="data.settings.ha_schedule_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
+              </button>
+            </div>
+            <div x-show="data.settings.ha_schedule_enabled" class="space-y-2">
+              <select x-model="data.settings.ha_schedule" @change="data.settings = { ...data.settings }"
+                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-medium">
+                <option value="30 3 * * 0" x-text="t('haFreqWeekly')"></option>
+                <option value="30 3 1,15 * *" x-text="t('haFreqBiweekly')"></option>
+                <option value="30 3 1 * *" x-text="t('haFreqMonthly')"></option>
+              </select>
+              <input type="text" x-model="data.settings.ha_schedule" @input="data.settings = { ...data.settings }" placeholder="30 3 * * 0"
+                class="w-full h-9 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-[11px] font-mono text-slate-400" />
+            </div>
+            <label class="flex items-center gap-2 pt-1 cursor-pointer select-none">
+              <input type="checkbox" x-model="data.settings.ha_auto_clean" @change="data.settings = { ...data.settings }" class="rounded border-slate-600 text-blue-600 focus:ring-blue-500 bg-slate-900 w-4 h-4" />
+              <span class="text-[11px] text-slate-300 leading-tight" x-text="t('haCleanLabel')"></span>
+            </label>
+          </div>
           </div>
 
           <div class="space-y-2">
@@ -832,6 +941,12 @@
         tabSettings: 'Cài đặt',
         appListTitle: 'Danh sách Container',
         backupAll: 'Sao lưu tất cả',
+        selectAppsBtn: 'Chọn nhiều',
+        cancelSelectBtn: 'Bỏ chọn',
+        backupSelectedBtn: 'Sao lưu mục đã chọn',
+        selectVersionLabel: 'Chọn phiên bản (Mặc định bản mới nhất):',
+        versionsCountLabel: 'phiên bản',
+        deletingProgress: 'Đang xóa bản sao lưu...',
         processing: 'Đang xử lý...',
         lastBackup: 'Lần cuối',
         none: 'Chưa có',
@@ -883,6 +998,12 @@
         recreateDesc: 'Bật khi khôi phục trên máy mới cài lại hoặc cần dựng lại cấu hình mạng/biến môi trường.',
         scheduleSecuritySection: 'Lịch tự động & Bảo mật',
         autoSchedule: 'Tự động sao lưu theo lịch (Cron)',
+          haScheduleTitle: 'Lịch sao lưu riêng Home Assistant',
+          haCleanLabel: 'Tự động xóa file rác (.sync-conflict, log cũ) trước khi nén',
+          haFreqWeekly: 'Mỗi 1 tuần (03:30 sáng Chủ Nhật)',
+          haFreqBiweekly: 'Mỗi 2 tuần (03:30 sáng ngày 1 & 15)',
+          haFreqMonthly: 'Mỗi tháng 1 lần (03:30 sáng ngày 1)',
+          autoBackupApps: 'Ứng dụng sao lưu tự động (Bấm để bật/tắt):',
         cronHint: 'Ví dụ: 0 3 * * * (03:00 sáng mỗi ngày cho cả SSD & Cloud)',
         encryptionLabel: 'Mã hóa bản sao lưu (AES-256)',
         passwordPlaceholder: 'Mật khẩu mã hóa / giải mã...',
@@ -918,6 +1039,12 @@
         tabSettings: 'Settings',
         appListTitle: 'Discovered Containers',
         backupAll: 'Backup All',
+        selectAppsBtn: 'Select',
+        cancelSelectBtn: 'Cancel',
+        backupSelectedBtn: 'Backup Selected',
+        selectVersionLabel: 'Select Version (Latest by default):',
+        versionsCountLabel: 'versions',
+        deletingProgress: 'Deleting snapshot...',
         processing: 'Working...',
         lastBackup: 'Latest',
         none: 'Never',
@@ -966,9 +1093,15 @@
         retentionLabel: 'Max versions kept per app',
         retentionHint: 'Auto-prunes older versions on both Local SSD and Cloud',
         recreateLabel: 'Recreate Container on Restore',
-        recreateDesc: 'Enable for fresh CasaOS installs or to restore network/env specs.',
+        recreateDesc: 'Enable for fresh CasaOS installs or to restore network/env.',
         scheduleSecuritySection: 'Automation & Security',
         autoSchedule: 'Scheduled Auto-Backup (Cron)',
+          haScheduleTitle: 'Dedicated Home Assistant Schedule',
+          haCleanLabel: 'Auto-delete junk files (.sync-conflict, old logs) before backup',
+          haFreqWeekly: 'Every 1 Week (Sun at 3:30 AM)',
+          haFreqBiweekly: 'Every 2 Weeks (1st & 15th at 3:30 AM)',
+          haFreqMonthly: 'Monthly (1st of month at 3:30 AM)',
+          autoBackupApps: 'Apps included in Auto-Backup (Tap to toggle):',
         cronHint: 'Example: 0 3 * * * (Daily at 3:00 AM for SSD & Cloud)',
         encryptionLabel: 'Encrypt Archives (AES-256)',
         passwordPlaceholder: 'Encryption password...',
@@ -977,8 +1110,8 @@
         remotePathLabel: 'Remote Destination Path',
         editRcloneBtn: 'Edit rclone.conf',
         saveRcloneBtn: 'Save rclone.conf',
-        recoveryKeyTitle: '1-Tap Cloud Recovery Key',
-        recoveryKeyDesc: 'Save this key in iPhone Notes to restore Google Drive connection instantly on a fresh install.',
+        recoveryKeyTitle: 'Cloud Recovery Key',
+        recoveryKeyDesc: 'Backup or restore Rclone config.',
         exportKeyBtn: 'Copy Key',
         importKeyBtn: 'Paste Key',
         applyKeyBtn: 'Restore',
@@ -1006,9 +1139,12 @@
         importKeyText: '',
         toast: { message: '', type: 'success' },
         task: { active: false, title: '', detail: '', progress: 0, status: 'idle' },
+        selectMode: false,
+        selectedApps: [],
+        deletingBackup: false,
         cloudModal: { open: false, mode: 'push', targetApp: 'ALL', availableApps: [], loadingList: false },
-        restoreModal: { open: false, snap: null, source: 'ssd' },
-        deleteModal: { open: false, snap: null },
+        restoreModal: { open: false, snap: null, versions: [], selectedVersionId: '', source: 'ssd' },
+        deleteModal: { open: false, snap: null, versions: [], selectedVersionId: '' },
         data: {
           disk: { free_gb: 0, appdata_size_mb: 0, backup_size_mb: 0 },
           containers: [],
@@ -1016,7 +1152,7 @@
           ssd_apps: [],
           cloud_apps: [],
           backups: [],
-          settings: { backup_mode: 'local_cloud', retention_count: 5 },
+          settings: { backup_mode: 'local_cloud', retention_count: 5, excluded_auto_apps: [], ha_schedule_enabled: true, ha_schedule: '30 3 * * 0', ha_auto_clean: true },
           rclone: { configured: false, remotes: [], config_text: '' }
         },
         initApp() {
@@ -1048,9 +1184,61 @@
         toggleAppDetail(id) {
           this.openDetails[id] = !this.openDetails[id];
         },
+        toggleSelectMode() {
+          this.selectMode = !this.selectMode;
+          this.selectedApps = [];
+        },
+        toggleSelectApp(name) {
+          if (this.selectedApps.includes(name)) {
+            this.selectedApps = this.selectedApps.filter(x => x !== name);
+          } else {
+            this.selectedApps.push(name);
+          }
+        },
+        async runSelectedBackups() {
+          if (this.selectedApps.length === 0) return;
+          const targets = [...this.selectedApps];
+          this.selectMode = false;
+          this.selectedApps = [];
+          try {
+            const res = await fetch('/api/backup-batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ app_names: targets })
+            });
+            await this.parseResponse(res);
+            this.task = { active: true, title: this.t('processing'), detail: targets.join(', '), progress: 10 };
+            this.startPollingTask();
+          } catch (e) {
+            this.showToast(e.message, 'error');
+          }
+        },
         filteredBackups() {
-          if (this.filterApp === 'ALL') return this.data.backups;
-          return this.data.backups.filter(b => b.app_name === this.filterApp);
+          const list = this.filterApp === 'ALL'
+            ? (this.data.backups || [])
+            : (this.data.backups || []).filter(b => b.app_name === this.filterApp);
+          const groups = {};
+          for (const b of list) {
+            if (!groups[b.app_name]) {
+              groups[b.app_name] = {
+                ...b,
+                versions: [b],
+                versions_count: 1,
+                any_ssd: Boolean(b.on_ssd),
+                any_cloud: Boolean(b.on_cloud)
+              };
+            } else {
+              groups[b.app_name].versions.push(b);
+              groups[b.app_name].versions_count++;
+              if (b.on_ssd) groups[b.app_name].any_ssd = true;
+              if (b.on_cloud) groups[b.app_name].any_cloud = true;
+            }
+          }
+          return Object.values(groups).map(g => ({
+            ...g,
+            on_ssd: g.any_ssd,
+            on_cloud: g.any_cloud
+          }));
         },
         snapshotSettingsState() {
           const s = this.data.settings || {};
@@ -1059,6 +1247,10 @@
             retention_count: Number(s.retention_count),
             schedule_enabled: Boolean(s.schedule_enabled),
             schedule: s.schedule,
+            excluded_auto_apps: [...(s.excluded_auto_apps || [])].sort(),
+            ha_schedule_enabled: Boolean(s.ha_schedule_enabled),
+            ha_schedule: s.ha_schedule || '30 3 * * 0',
+            ha_auto_clean: Boolean(s.ha_auto_clean),
             encryption_enabled: Boolean(s.encryption_enabled),
             encryption_password: s.encryption_password,
             rclone_remote: s.rclone_remote
@@ -1187,10 +1379,25 @@
             this.showToast(e.message, 'error');
           }
         },
-        openRestoreDialog(snap) {
-          this.restoreModal.snap = snap;
-          this.restoreModal.source = snap.on_ssd ? 'ssd' : 'cloud';
+        openRestoreDialog(groupSnap) {
+          const versions = groupSnap.versions || [groupSnap];
+          const latest = versions[0];
+          this.restoreModal.versions = versions;
+          this.restoreModal.selectedVersionId = latest.version_id;
+          this.restoreModal.snap = latest;
+          this.restoreModal.source = latest.on_ssd ? 'ssd' : 'cloud';
           this.restoreModal.open = true;
+        },
+        onRestoreVersionChange() {
+          const found = (this.restoreModal.versions || []).find(v => v.version_id === this.restoreModal.selectedVersionId);
+          if (found) {
+            this.restoreModal.snap = found;
+            if (this.restoreModal.source === 'ssd' && !found.on_ssd && found.on_cloud) {
+              this.restoreModal.source = 'cloud';
+            } else if (this.restoreModal.source === 'cloud' && !found.on_cloud && found.on_ssd) {
+              this.restoreModal.source = 'ssd';
+            }
+          }
         },
         async confirmRestoreModal() {
           const snap = this.restoreModal.snap;
@@ -1198,7 +1405,7 @@
           this.restoreModal.open = false;
           if (!snap) return;
 
-          this.task = { active: true, title: `Restore ${snap.app_name}...`, detail: source.toUpperCase(), progress: 20 };
+          this.task = { active: true, title: `Restore ${snap.app_name}...`, detail: `${snap.version_id} (${source.toUpperCase()})`, progress: 20 };
           this.startPollingTask();
           try {
             const res = await fetch('/api/restore', {
@@ -1218,21 +1425,42 @@
             this.showToast(e.message, 'error');
           }
         },
-        openDeleteDialog(snap) {
-          this.deleteModal.snap = snap;
+        openDeleteDialog(groupSnap) {
+          const versions = groupSnap.versions || [groupSnap];
+          const latest = versions[0];
+          this.deleteModal.versions = versions;
+          this.deleteModal.selectedVersionId = latest.version_id;
+          this.deleteModal.snap = latest;
+          this.deletingBackup = false;
           this.deleteModal.open = true;
+        },
+        onDeleteVersionChange() {
+          const found = (this.deleteModal.versions || []).find(v => v.version_id === this.deleteModal.selectedVersionId);
+          if (found) {
+            this.deleteModal.snap = found;
+          }
         },
         async confirmDelete(target) {
           const snap = this.deleteModal.snap;
-          this.deleteModal.open = false;
-          if (!snap) return;
+          if (!snap || this.deletingBackup) return;
+          this.deletingBackup = true;
+          this.task = {
+            active: true,
+            title: this.t('deletingProgress'),
+            detail: `${snap.app_name} (${snap.timestamp_str})`,
+            progress: 50
+          };
           try {
             const res = await fetch(`/api/backup/${snap.app_name}/${snap.version_id}?target=${target}`, { method: 'DELETE' });
             await this.parseResponse(res);
+            this.deleteModal.open = false;
             this.showToast(this.lang === 'vi' ? 'Đã xóa bản sao lưu!' : 'Snapshot deleted!');
             await this.loadOverview(false);
           } catch (e) {
             this.showToast(e.message, 'error');
+          } finally {
+            this.deletingBackup = false;
+            this.task.active = false;
           }
         },
         async saveSettings() {
@@ -1274,8 +1502,31 @@
           try {
             const res = await fetch('/api/recovery-key');
             const out = await this.parseResponse(res);
-            await navigator.clipboard.writeText(out.recovery_key);
-            this.showToast(this.lang === 'vi' ? 'Đã sao chép Khóa Khôi Phục vào bộ nhớ tạm! Hãy dán vào Ghi chú iPhone.' : 'Recovery Key copied to clipboard! Save it in iPhone Notes.');
+            await ((text) => {
+            if (navigator.clipboard && window.isSecureContext) {
+                return navigator.clipboard.writeText(text);
+            } else {
+                return new Promise((resolve, reject) => {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    ta.style.top = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        resolve();
+                    } catch (e) {
+                        document.body.removeChild(ta);
+                        reject(e);
+                    }
+                });
+            }
+        })(out.recovery_key);
+            this.showToast(this.lang === 'vi' ? 'Đã sao chép Khóa Khôi Phục vào bộ nhớ tạm! Hãy dán vào Ghi chú iPhone.' : 'Recovery Key copied to clipboard! Save it.');
           } catch (e) {
             this.showToast(e.message, 'error');
           }

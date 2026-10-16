@@ -41,6 +41,10 @@ IGNORED_MOUNT_SOURCES = [
 ]
 
 DEFAULT_SETTINGS = {
+    "ha_schedule_enabled": True,
+    "ha_schedule": "30 3 * * 0",
+    "ha_auto_clean": True,
+    "excluded_auto_apps": [],
     "backup_mode": "local_cloud",
     "schedule": "0 3 * * *",
     "schedule_enabled": False,
@@ -455,6 +459,19 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
         if manage_task_state:
             update_task(True, "backup", f"Đang nén dữ liệu {app_name}...", "Đang đóng gói các thư mục AppData", 40, "running")
 
+        if app_name == "homeassistant" and settings.get("ha_auto_clean", True):
+            ha_cfg = Path("/DATA/AppData/homeassistant/config")
+            if ha_cfg.exists():
+                for pat in ["*sync-conflict*", "*.log.1", "*.log.fault", "OZW_Log.txt"]:
+                    for junk in ha_cfg.rglob(pat):
+                        try:
+                            if junk.is_file(): junk.unlink()
+                        except Exception: pass
+                for pyc in ha_cfg.rglob("__pycache__"):
+                    try:
+                        if pyc.is_dir(): shutil.rmtree(pyc, ignore_errors=True)
+                    except Exception: pass
+
         with tarfile.open(archive_path, "w:gz") as tar:
             for idx, m in enumerate(mounts):
                 if CANCEL_EVENT.is_set():
@@ -531,10 +548,26 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
             update_task(False, "backup", "Đã hủy sao lưu", f"Đã dọn dẹp file tạm của {app_name}", 100, "cancelled")
         raise
 
-def run_backup_task(app_name: str):
+def run_backup_task(app_name):
     try:
-        if app_name == "ALL":
+        if isinstance(app_name, list):
+            target_names = [a for a in app_name if a]
+            total = len(target_names)
+            for idx, name in enumerate(target_names, start=1):
+                if CANCEL_EVENT.is_set():
+                    raise TaskCancelledError("Đã hủy sao lưu hàng loạt")
+                pct = int(((idx - 1) / max(total, 1)) * 85) + 5
+                update_task(True, "backup", f"Đang sao lưu ({idx}/{total}): {name}", "Đóng gói cấu hình & dữ liệu...", pct, "running")
+                backup_single_app(name, manage_task_state=False)
+            update_task(False, "backup", "Đã sao lưu các ứng dụng đã chọn!", f"Hoàn tất {total}/{total} ứng dụng", 100, "completed")
+        elif app_name in ("ALL", "AUTO"):
             containers = discover_containers()
+            if app_name == "AUTO":
+                st = load_settings()
+                excluded = set(st.get("excluded_auto_apps", []))
+                if st.get("ha_schedule_enabled"):
+                    excluded.add("homeassistant")
+                containers = [c for c in containers if c["name"] not in excluded]
             total = len(containers)
             for idx, c in enumerate(containers, start=1):
                 if CANCEL_EVENT.is_set():
@@ -714,7 +747,11 @@ scheduler.start()
 
 def scheduled_backup_all():
     CANCEL_EVENT.clear()
-    run_backup_task("ALL")
+    run_backup_task("AUTO")
+
+def scheduled_backup_ha():
+    CANCEL_EVENT.clear()
+    run_backup_task("homeassistant")
 
 def reload_scheduler():
     scheduler.remove_all_jobs()
@@ -729,6 +766,16 @@ def reload_scheduler():
             )
         except Exception as e:
             print(f"Lỗi cấu hình Cron: {e}")
+    if settings.get("ha_schedule_enabled") and settings.get("ha_schedule"):
+        try:
+            scheduler.add_job(
+                scheduled_backup_ha,
+                CronTrigger.from_crontab(settings["ha_schedule"]),
+                id="auto_backup_ha",
+                replace_existing=True
+            )
+        except Exception as e:
+            print(f"Lỗi cấu hình Cron HA: {e}")
 
 reload_scheduler()
 
@@ -852,6 +899,21 @@ def api_overview(refresh_cloud: bool = False):
         },
         "task": TASK_STATE
     }
+
+class BatchBackupRequest(BaseModel):
+    app_names: list[str]
+
+@app.post("/api/backup-batch")
+def api_backup_batch(req: BatchBackupRequest):
+    if TASK_STATE.get("active"):
+        raise HTTPException(status_code=400, detail="Hệ thống đang chạy một tiến trình khác!")
+    if not req.app_names:
+        raise HTTPException(status_code=400, detail="Chưa chọn ứng dụng nào!")
+    CANCEL_EVENT.clear()
+    update_task(True, "backup", f"Khởi tạo sao lưu ({len(req.app_names)} ứng dụng)...", ", ".join(req.app_names), 5, "running")
+    t = threading.Thread(target=run_backup_task, args=(req.app_names,), daemon=True)
+    t.start()
+    return {"status": "started"}
 
 @app.post("/api/backup/{app_name}")
 def api_backup_app(app_name: str):

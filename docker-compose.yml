@@ -1,18 +1,79 @@
 name: casaos-backup-manager
 services:
-  backup-manager:
-    build: .
-    container_name: casaos-backup-manager
-    restart: unless-stopped
-    network_mode: bridge
-    ports:
-      - "8095:8095"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /DATA:/DATA
-      - /var/lib/docker/volumes:/var/lib/docker/volumes
-      - /DATA/AppData/casaos-backup-manager/config:/root/.config/rclone
-      - /DATA/AppData/casaos-backup-manager/app:/app
-    environment:
-      - TZ=America/Denver
-      - BACKUP_ROOT=/DATA/Backups
+    backup-manager:
+        build:
+            context: /DATA/AppData/casaos-backup-manager
+            dockerfile: Dockerfile
+        cpu_shares: 90
+        command: []
+        container_name: casaos-backup-manager
+        deploy:
+            resources:
+                limits:
+                    memory: "7613710336"
+        environment:
+            BACKUP_ROOT: /DATA/Backups
+            TZ: America/Denver
+        hostname: casaos-backup-manager
+        image: casaos-backup-manager:latest
+        labels:
+            icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/rclone.png
+        networks:
+            default: null
+        ports:
+            - mode: ingress
+              target: 8095
+              published: "8095"
+              protocol: tcp
+        restart: unless-stopped
+        volumes:
+            - type: bind
+              source: /var/run/docker.sock
+              target: /var/run/docker.sock
+              bind:
+                create_host_path: true
+            - type: bind
+              source: /DATA
+              target: /DATA
+              bind:
+                create_host_path: true
+            - type: bind
+              source: /var/lib/docker/volumes
+              target: /var/lib/docker/volumes
+              bind:
+                create_host_path: true
+            - type: bind
+              source: /DATA/AppData/casaos-backup-manager/config
+              target: /root/.config/rclone
+              bind:
+                create_host_path: true
+            - type: bind
+              source: /DATA/AppData/casaos-backup-manager/app
+              target: /app
+              bind:
+                create_host_path: true
+        x-casaos:
+            author: self
+            category: Utilities
+            hostname: ""
+            icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/icloud.png
+            index: /
+            port_map: "8095"
+            scheme: http
+            title:
+                en: Backup Manager
+                en_us: Backup Manager
+networks:
+    default:
+        name: casaos-backup-manager_default
+x-casaos:
+    author: self
+    category: self
+    hostname: ""
+    icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/rclone.png
+    index: /
+    is_uncontrolled: false
+    port_map: ""
+    scheme: http
+    title:
+        custom: Backup Manager

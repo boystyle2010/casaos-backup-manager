@@ -3,3 +3,5 @@ __pycache__/
 *.tar.gz
 *.enc
 extract_tmp/
+auto-push.sh
+*.bak
