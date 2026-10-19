@@ -27,27 +27,52 @@
       -webkit-tap-highlight-color: transparent;
       -webkit-font-smoothing: antialiased;
     }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    html, body {
+      background-color: #e4ebf5;
+    }
+    html.dark, html.dark body {
+      background-color: #09101f;
+    }
+    body {
+      background-image:
+        radial-gradient(ellipse 95% 230px at 50% 240px, rgba(59, 130, 246, 0.20) 0%, transparent 100%),
+        radial-gradient(circle 320px at 88% 480px, rgba(139, 92, 246, 0.14) 0%, transparent 100%),
+        radial-gradient(circle 320px at 12% 720px, rgba(16, 185, 129, 0.12) 0%, transparent 100%);
+      background-repeat: no-repeat;
+    }
+    html.dark body {
+      background-image:
+        radial-gradient(ellipse 95% 240px at 50% 250px, rgba(37, 99, 235, 0.28) 0%, transparent 100%),
+        radial-gradient(circle 340px at 88% 500px, rgba(124, 58, 237, 0.16) 0%, transparent 100%),
+        radial-gradient(circle 340px at 12% 760px, rgba(16, 185, 129, 0.12) 0%, transparent 100%);
+      background-repeat: no-repeat;
+    }
+    .bg-white.dark\:bg-darkcard {
+      background-color: rgba(255, 255, 255, 0.92) !important;
+      box-shadow: 0 8px 24px -6px rgba(15, 23, 42, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 1);
+    }
+    html.dark .bg-white.dark\:bg-darkcard {
+      background-color: rgba(17, 24, 39, 0.88) !important;
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 100%);
+      box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+    }
   </style>
 </head>
-<body class="min-h-screen bg-[#f2f2f7] text-slate-900 dark:bg-darkbg dark:text-slate-100 transition-colors duration-200 pb-32"
+<body class="min-h-screen bg-[#e9edf4] text-slate-900 dark:bg-darkbg dark:text-slate-100 transition-colors duration-150 pb-36"
       x-data="backupManager()" x-init="initApp()" x-cloak>
 
   <!-- 1. FLOATING TOAST POPUP -->
   <div x-show="toast.message"
-       x-transition:enter="transition ease-out duration-300"
-       x-transition:enter-start="opacity-0 -translate-y-6 scale-95"
-       x-transition:enter-end="opacity-100 translate-y-0 scale-100"
-       x-transition:leave="transition ease-in duration-200"
-       x-transition:leave-start="opacity-100 translate-y-0 scale-100"
-       x-transition:leave-end="opacity-0 -translate-y-6 scale-95"
+       x-transition.opacity.duration.150ms
        class="fixed top-4 inset-x-4 max-w-md mx-auto z-50 pointer-events-auto">
-    <div class="p-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center justify-between gap-3 text-xs sm:text-sm"
+    <div class="p-3.5 rounded-2xl border shadow-xl flex items-center justify-between gap-3 text-xs sm:text-sm"
          :class="toast.type === 'error'
-           ? 'bg-red-950/95 border-red-600/80 text-red-100 shadow-red-950/50'
-           : 'bg-emerald-950/95 border-emerald-500/80 text-emerald-100 shadow-emerald-950/50'">
+           ? 'bg-rose-950 border-rose-600/80 text-rose-100'
+           : 'bg-emerald-950 border-emerald-500/80 text-emerald-100'">
       <div class="flex items-center gap-2.5 min-w-0">
         <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-             :class="toast.type === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'">
+             :class="toast.type === 'error' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'">
           <svg x-show="toast.type !== 'error'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
           </svg>
@@ -57,14 +82,43 @@
         </div>
         <span class="font-semibold break-words leading-snug" x-text="toast.message"></span>
       </div>
-      <button @click="toast.message = ''" class="text-xs font-semibold opacity-80 hover:opacity-100 px-2 py-1 rounded-lg bg-white/10 shrink-0" x-text="t('close')"></button>
+      <button @click="toast.message = ''" class="text-xs font-semibold opacity-80 hover:opacity-100 px-2.5 py-1 rounded-lg bg-white/10 shrink-0" x-text="t('close')"></button>
     </div>
   </div>
 
-  <!-- 2. FLOATING BACKGROUND TASK PROGRESS BAR (Có nút Hủy & nút Thu gọn) -->
-  <div x-show="task.active" class="fixed bottom-5 inset-x-4 max-w-md mx-auto z-40 pointer-events-auto">
-    <div x-show="!progressMinimized" x-transition
-         class="bg-white/95 dark:bg-[#181d28]/95 backdrop-blur-xl border border-blue-500/40 rounded-2xl p-4 shadow-2xl space-y-2.5">
+  <!-- 2. FLOATING UNSAVED SETTINGS BAR -->
+  <div x-show="activeTab === 'settings' && isSettingsDirty() && !task.active"
+       x-transition.opacity.duration.150ms
+       class="fixed bottom-4 inset-x-4 max-w-xl mx-auto z-40 pointer-events-auto">
+    <div class="bg-slate-900 dark:bg-[#181f2e] border border-blue-500/60 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 min-w-0 pl-1">
+        <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></span>
+        <span class="text-xs sm:text-sm font-semibold text-white truncate" x-text="t('unsavedNotice')"></span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button type="button" @click="discardSettings()"
+                class="h-9 px-3 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-white/10 transition"
+                x-text="t('discardBtn')">
+        </button>
+        <button type="button" @click="saveSettings()" :disabled="savingSettings"
+                class="h-9 px-4 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 flex items-center gap-1.5 transition">
+          <svg x-show="!savingSettings" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+          </svg>
+          <svg x-show="savingSettings" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span x-text="savingSettings ? t('processing') : t('saveSettingsBtn')"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. FLOATING BACKGROUND TASK PROGRESS BAR -->
+  <div x-show="task.active" class="fixed bottom-4 inset-x-4 max-w-md mx-auto z-40 pointer-events-auto">
+    <div x-show="!progressMinimized"
+         class="bg-white dark:bg-[#181d28] border border-blue-500/50 rounded-2xl p-4 shadow-2xl space-y-2.5">
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2.5 min-w-0">
           <svg class="w-4 h-4 text-blue-500 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
@@ -74,28 +128,26 @@
           <span class="text-xs sm:text-sm font-bold truncate" x-text="task.title"></span>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <!-- Nút Hủy Tiến Trình -->
           <button @click="cancelRunningTask()"
                   class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-500/15 text-rose-500 hover:bg-rose-500/25 border border-rose-500/30 transition"
                   x-text="t('cancelTaskBtn')">
           </button>
-          <!-- Nút Thu gọn -->
           <button @click="progressMinimized = true"
-                  class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:bg-slate-200 transition"
+                  class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition"
                   x-text="t('hideProgress')">
           </button>
         </div>
       </div>
       <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" x-text="task.detail"></p>
       <div class="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-        <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500 rounded-full"
+        <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 rounded-full"
              :style="`width: ${Math.max(task.progress || 10, 8)}%`"></div>
       </div>
     </div>
 
-    <div x-show="progressMinimized" x-transition class="flex justify-end gap-2">
+    <div x-show="progressMinimized" class="flex justify-end gap-2">
       <button @click="progressMinimized = false"
-              class="bg-blue-600 text-white text-xs font-semibold px-3.5 py-2 rounded-full shadow-xl flex items-center gap-2 border border-blue-400/40">
+              class="bg-blue-600 text-white text-xs font-semibold px-3.5 py-2 rounded-full shadow-xl flex items-center gap-2 border border-blue-400/40 tabular-nums">
         <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
@@ -105,13 +157,13 @@
     </div>
   </div>
 
-  <!-- 3. MODAL PUSH / PULL CLOUD (CHỈ HIỆN ĐÚNG APP ĐANG CÓ TRÊN CLOUD KHI PULL) -->
-  <div x-show="cloudModal.open" x-transition.opacity
-       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <!-- 4. MODAL PUSH / PULL CLOUD -->
+  <div x-show="cloudModal.open" x-transition.opacity.duration.150ms
+       class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="cloudModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-xl flex items-center justify-center"
                :class="cloudModal.mode === 'push' ? 'bg-blue-500/15 text-blue-500' : 'bg-purple-500/15 text-purple-500'">
             <svg x-show="cloudModal.mode === 'push'" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -133,7 +185,6 @@
       <p class="text-xs text-slate-500 dark:text-slate-400"
          x-text="cloudModal.mode === 'push' ? t('pushModalDesc') : t('pullModalDesc')"></p>
 
-      <!-- Trạng thái đang kiểm tra dữ liệu thực tế trên Cloud -->
       <div x-show="cloudModal.loadingList" class="py-4 flex items-center justify-center gap-2 text-xs text-purple-400">
         <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
@@ -142,13 +193,11 @@
         <span x-text="t('checkingCloudData')"></span>
       </div>
 
-      <!-- Nếu không có bản lưu nào trên Cloud/SSD -->
       <div x-show="!cloudModal.loadingList && cloudModal.availableApps.length === 0"
-           class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs text-center"
+           class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs text-center font-medium"
            x-text="cloudModal.mode === 'push' ? t('noSsdAppsToPush') : t('noCloudAppsToPull')">
       </div>
 
-      <!-- Dropdown chỉ hiển thị các App thực sự có dữ liệu -->
       <div x-show="!cloudModal.loadingList && cloudModal.availableApps.length > 0" class="space-y-1.5">
         <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400" x-text="t('selectTargetApp')"></label>
         <select x-model="cloudModal.targetApp"
@@ -167,7 +216,7 @@
         </button>
         <button @click="confirmCloudModal()"
                 :disabled="cloudModal.loadingList || cloudModal.availableApps.length === 0"
-                class="h-10 rounded-xl text-white text-xs font-semibold shadow-sm disabled:opacity-40"
+                class="h-10 rounded-xl text-white text-xs font-bold shadow-sm disabled:opacity-40"
                 :class="cloudModal.mode === 'push' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-purple-600 hover:bg-purple-500'"
                 x-text="cloudModal.mode === 'push' ? t('startPushBtn') : t('startPullBtn')">
         </button>
@@ -175,9 +224,9 @@
     </div>
   </div>
 
-  <!-- 4. MODAL CHỌN NGUỒN KHÔI PHỤC (SSD HAY CLOUD) -->
-  <div x-show="restoreModal.open" x-transition.opacity
-       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <!-- 5. MODAL CHỌN NGUỒN & PHIÊN BẢN KHÔI PHỤC -->
+  <div x-show="restoreModal.open" x-transition.opacity.duration.150ms
+       class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="restoreModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <div class="flex items-center justify-between">
@@ -189,18 +238,18 @@
         </button>
       </div>
 
-      <div class="bg-slate-50 dark:bg-slate-900/70 rounded-2xl p-3.5 text-xs space-y-2.5 border border-slate-200/60 dark:border-darkborder">
+      <div class="bg-slate-50 dark:bg-slate-900/75 rounded-2xl p-3.5 text-xs space-y-2.5 border border-slate-200/70 dark:border-darkborder">
         <div class="flex items-center justify-between">
-          <div class="font-bold text-emerald-500 text-sm" x-text="restoreModal.snap?.app_name"></div>
-          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+          <div class="font-bold text-emerald-600 dark:text-emerald-400 text-sm truncate" x-text="restoreModal.snap?.app_name"></div>
+          <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                 x-text="(restoreModal.versions?.length || 1) + ' ' + t('versionsCountLabel')"></span>
         </div>
         <div class="space-y-1">
-          <label class="block text-[11px] font-semibold text-slate-400" x-text="t('selectVersionLabel')"></label>
+          <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400" x-text="t('selectVersionLabel')"></label>
           <select x-model="restoreModal.selectedVersionId" @change="onRestoreVersionChange()"
-                  class="w-full h-10 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 text-xs font-medium">
+                  class="w-full h-10 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 text-xs font-semibold tabular-nums">
             <template x-for="(v, idx) in restoreModal.versions" :key="v.version_id">
-              <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + v.size_mb + ' MB' + (idx === 0 ? ' (Latest)' : '')"></option>
+              <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? ' (Latest)' : '')"></option>
             </template>
           </select>
         </div>
@@ -218,7 +267,6 @@
                   : (restoreModal.snap?.on_ssd ? 'border-slate-200 dark:border-darkborder' : 'opacity-40 cursor-not-allowed border-slate-200 dark:border-darkborder')">
           <div class="flex items-center gap-2.5">
             <div class="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-500 flex items-center justify-center">
-              <!-- Symmetric 3-bar SSD Icon -->
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                 <rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/>
                 <rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/>
@@ -231,7 +279,7 @@
             </div>
           </div>
           <div class="w-4 h-4 rounded-full border flex items-center justify-center"
-               :class="restoreModal.source === 'ssd' ? 'border-blue-500 bg-blue-500' : 'border-slate-500'">
+               :class="restoreModal.source === 'ssd' ? 'border-blue-500 bg-blue-500' : 'border-slate-400'">
             <div x-show="restoreModal.source === 'ssd'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
           </div>
         </button>
@@ -255,7 +303,7 @@
             </div>
           </div>
           <div class="w-4 h-4 rounded-full border flex items-center justify-center"
-               :class="restoreModal.source === 'cloud' ? 'border-purple-500 bg-purple-500' : 'border-slate-500'">
+               :class="restoreModal.source === 'cloud' ? 'border-purple-500 bg-purple-500' : 'border-slate-400'">
             <div x-show="restoreModal.source === 'cloud'" class="w-1.5 h-1.5 rounded-full bg-white"></div>
           </div>
         </button>
@@ -267,35 +315,34 @@
                 x-text="t('cancelBtn')">
         </button>
         <button @click="confirmRestoreModal()"
-                class="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm"
+                class="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm"
                 x-text="t('confirmRestoreBtn')">
         </button>
       </div>
     </div>
   </div>
 
-  <!-- 5. MODAL CHỌN NƠI XÓA (CÓ CHỌN PHIÊN BẢN & TRẠNG THÁI ĐANG XÓA) -->
-  <div x-show="deleteModal.open" x-transition.opacity
-       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+  <!-- 6. MODAL CHỌN NƠI XÓA -->
+  <div x-show="deleteModal.open" x-transition.opacity.duration.150ms
+       class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="if(!deletingBackup) deleteModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-base font-bold text-rose-500" x-text="t('deleteModalTitle')"></h3>
-        <span class="text-xs font-bold text-emerald-500" x-text="deleteModal.snap?.app_name"></span>
+        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[140px]" x-text="deleteModal.snap?.app_name"></span>
       </div>
 
       <div class="space-y-1">
-        <label class="block text-[11px] font-semibold text-slate-400" x-text="t('selectVersionLabel')"></label>
+        <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400" x-text="t('selectVersionLabel')"></label>
         <select x-model="deleteModal.selectedVersionId" @change="onDeleteVersionChange()" :disabled="deletingBackup"
-                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-xs font-medium">
+                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-xs font-semibold tabular-nums">
           <template x-for="(v, idx) in deleteModal.versions" :key="v.version_id">
-            <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + v.size_mb + ' MB' + (idx === 0 ? ' (Latest)' : '')"></option>
+            <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? ' (Latest)' : '')"></option>
           </template>
         </select>
       </div>
 
-      <!-- Thanh tiến trình đang xóa -->
-      <div x-show="deletingBackup" class="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center gap-2.5 text-xs font-semibold text-rose-400">
+      <div x-show="deletingBackup" class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center gap-2.5 text-xs font-semibold text-rose-500">
         <svg class="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
@@ -306,7 +353,7 @@
       <div class="space-y-2" x-show="!deletingBackup">
         <button x-show="deleteModal.snap?.on_ssd && deleteModal.snap?.on_cloud"
                 @click="confirmDelete('both')"
-                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition"
+                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition"
                 x-text="t('deleteBoth')">
         </button>
         <button x-show="deleteModal.snap?.on_ssd"
@@ -327,137 +374,193 @@
     </div>
   </div>
 
-  <!-- MAIN CONTAINER -->
-  <div class="max-w-3xl mx-auto px-4 pt-4 space-y-4">
+  <!-- ================= MAIN CONTAINER ================= -->
+  <div class="relative z-10 max-w-3xl mx-auto px-3.5 sm:px-5 pt-3.5 space-y-3.5">
 
-    <!-- TOP BAR -->
-    <header class="flex items-center justify-between gap-3 bg-white/90 dark:bg-darkcard/90 backdrop-blur-md border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 shadow-sm">
+    <!-- TOP HEADER BAR (Nền đặc chuẩn xác, không dùng backdrop-blur gây lỗi biến mất trên iOS Safari) -->
+    <header class="flex items-center justify-between gap-3 bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3.5 shadow-sm">
       <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-sm shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
           </svg>
         </div>
         <div class="min-w-0 flex-1">
-          <h1 class="text-base font-bold tracking-tight truncate">CasaOS Backup</h1>
-          <p class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="t('subtitle')"></p>
+          <div class="flex items-center gap-1.5">
+            <h1 class="text-base font-extrabold tracking-tight truncate">CasaOS Backup</h1>
+            <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">PRO</span>
+          </div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" x-text="t('subtitle')"></p>
         </div>
       </div>
 
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button @click="refreshAll()" :disabled="refreshing"
+                class="w-9 h-9 rounded-xl inline-flex items-center justify-center border border-slate-200 dark:border-darkborder bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition"
+                :title="t('refreshBtn')">
+          <svg class="w-4 h-4 text-emerald-500" :class="refreshing ? 'animate-spin' : ''" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+          </svg>
+        </button>
+
         <button @click="toggleLang()"
-                class="h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap inline-flex items-center justify-center gap-1.5 border border-slate-200 dark:border-darkborder bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition">
-          <svg class="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                class="h-9 px-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap inline-flex items-center justify-center gap-1 border border-slate-200 dark:border-darkborder bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition">
+          <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/>
           </svg>
           <span x-text="lang.toUpperCase()"></span>
         </button>
 
         <button @click="toggleTheme()"
-                class="w-9 h-9 rounded-xl inline-flex items-center justify-center border border-slate-200 dark:border-darkborder bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                class="w-9 h-9 rounded-xl inline-flex items-center justify-center border border-slate-200 dark:border-darkborder bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
                 :title="t('theme')">
-          <svg x-show="darkMode" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <svg x-show="darkMode" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
           </svg>
-          <svg x-show="!darkMode" class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <svg x-show="!darkMode" class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
           </svg>
         </button>
       </div>
     </header>
 
-    <!-- 2x2 STATS CARDS (Icon SSD 3 vạch cân đối tuyệt đối) -->
-    <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statApps')"></span>
-          <div class="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3"/>
-            </svg>
+    <!-- BENTO TELEMETRY DASHBOARD -->
+    <section class="space-y-3">
+      <div class="grid grid-cols-3 gap-2.5">
+        <!-- Card 1: Applications -->
+        <div @click="activeTab = 'apps'" class="cursor-pointer bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3 flex flex-col justify-between h-[94px] shadow-sm">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate" x-text="t('statApps')"></span>
+            <div class="w-6 h-6 rounded-lg bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <div class="text-2xl font-extrabold tracking-tight leading-none tabular-nums" x-text="data.containers.length"></div>
+            <div class="flex items-center gap-1 mt-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+              <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 truncate tabular-nums" x-text="runningCount() + ' ' + t('running')"></span>
+            </div>
           </div>
         </div>
-        <div>
-          <div class="text-xl font-bold tracking-tight leading-none" x-text="data.containers.length"></div>
-          <div class="text-[11px] text-slate-400 mt-1 truncate" x-text="runningCount() + ' ' + t('running')"></div>
+
+        <!-- Card 2: Snapshots -->
+        <div @click="activeTab = 'restore'" class="cursor-pointer bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3 flex flex-col justify-between h-[94px] shadow-sm">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate" x-text="t('statBackups')"></span>
+            <div class="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <div class="text-2xl font-extrabold tracking-tight leading-none tabular-nums" x-text="data.backups.length"></div>
+            <div class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1.5 truncate tabular-nums" x-text="formatSize(data.disk.backup_size_mb)"></div>
+          </div>
+        </div>
+
+        <!-- Card 3: Cloud Sync Mode -->
+        <div @click="activeTab = 'settings'" class="cursor-pointer bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3 flex flex-col justify-between h-[94px] shadow-sm">
+          <div class="flex items-center justify-between gap-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate" x-text="t('statCloud')"></span>
+            <div class="w-6 h-6 rounded-lg bg-purple-500/15 text-purple-500 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs sm:text-sm font-extrabold tracking-tight uppercase leading-none truncate" x-text="formatMode(data.settings.backup_mode)"></div>
+            <div class="flex items-center gap-1 mt-1.5">
+              <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="data.rclone.configured ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+              <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 truncate" x-text="data.rclone.configured ? t('cloudConnected') : t('cloudNotSet')"></span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statBackups')"></span>
-          <div class="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+      <!-- Thẻ Dung Lượng SSD -->
+      <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3.5 shadow-sm space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/>
+                <rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/>
+                <rect x="3" y="16" width="18" height="4.5" rx="1.5"/>
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-extrabold tracking-tight" x-text="t('ssdTelemetryTitle')"></span>
+                <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 tabular-nums"
+                      x-text="(data.disk.percent || 0) + '%'"></span>
+              </div>
+              <div class="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                <span x-text="t('usedLabel') + ': '"></span>
+                <b class="text-slate-800 dark:text-slate-200" x-text="(data.disk.used_gb || 0) + ' GB'"></b>
+                <span> / </span>
+                <span x-text="(data.disk.total_gb || 0) + ' GB'"></span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div>
-          <div class="text-xl font-bold tracking-tight leading-none" x-text="data.backups.length"></div>
-          <div class="text-[11px] text-slate-400 mt-1 truncate" x-text="data.disk.backup_size_mb + ' MB'"></div>
-        </div>
-      </div>
 
-      <!-- Free SSD Card với Icon 3 tầng cân đối -->
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statStorage')"></span>
-          <div class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/>
-              <rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/>
-              <rect x="3" y="16" width="18" height="4.5" rx="1.5"/>
-            </svg>
+          <div class="text-right shrink-0 tabular-nums">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400" x-text="t('statStorage')"></div>
+            <div class="text-base sm:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight" x-text="(data.disk.free_gb || 0) + ' GB'"></div>
           </div>
         </div>
-        <div>
-          <div class="text-xl font-bold tracking-tight leading-none" x-text="data.disk.free_gb + ' GB'"></div>
-          <div class="text-[11px] text-slate-400 mt-1 truncate" x-text="'AppData: ' + data.disk.appdata_size_mb + ' MB'"></div>
-        </div>
-      </div>
 
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-3.5 flex flex-col justify-between h-[98px] shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" x-text="t('statCloud')"></span>
-          <div class="w-6 h-6 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
-            </svg>
-          </div>
+        <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+               :style="`width: ${Math.max(Math.min(data.disk.percent || 8, 100), 4)}%`"></div>
         </div>
-        <div>
-          <div class="text-sm font-bold tracking-tight uppercase leading-none truncate" x-text="formatMode(data.settings.backup_mode)"></div>
-          <div class="text-[11px] text-slate-400 mt-1.5 truncate" x-text="data.rclone.configured ? t('cloudConnected') : t('cloudNotSet')"></div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span>AppData: <b class="text-slate-700 dark:text-slate-200" x-text="formatSize(data.disk.appdata_size_mb)"></b></span>
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+              <span>Backups: <b class="text-slate-700 dark:text-slate-200" x-text="formatSize(data.disk.backup_size_mb)"></b></span>
+            </span>
+          </div>
+          <span class="text-[10px] font-mono text-slate-400">/DATA</span>
         </div>
       </div>
     </section>
 
-    <!-- SEGMENTED TABS -->
-    <nav class="grid grid-cols-3 gap-1 bg-slate-200/80 dark:bg-darkcard p-1 rounded-2xl border border-slate-200/60 dark:border-darkborder">
+    <!-- SEGMENTED TABS NAVIGATION -->
+    <nav class="grid grid-cols-3 gap-1.5 bg-slate-200/90 dark:bg-darkcard p-1.5 rounded-2xl border border-slate-300/60 dark:border-darkborder shadow-sm">
       <button @click="activeTab = 'apps'"
-              class="py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              class="py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5"
               :class="activeTab === 'apps' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
         </svg>
         <span x-text="t('tabApps')"></span>
-        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400" x-text="data.containers.length"></span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 tabular-nums" x-text="data.containers.length"></span>
       </button>
 
       <button @click="activeTab = 'restore'"
-              class="py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
+              class="py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5"
               :class="activeTab === 'restore' ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
         </svg>
         <span x-text="t('tabRestore')"></span>
-        <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" x-text="data.backups.length"></span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 tabular-nums" x-text="groupedBackups.length"></span>
       </button>
 
       <button @click="activeTab = 'settings'"
-              class="py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 relative"
+              class="py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5 relative"
               :class="activeTab === 'settings' ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
@@ -468,62 +571,94 @@
 
     <!-- ================= TAB 1: APPLICATIONS ================= -->
     <section x-show="activeTab === 'apps'" class="space-y-3">
-      <div class="flex items-center justify-between gap-2 px-1">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 truncate" x-text="t('appListTitle')"></h2>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <!-- Nút Bật/Tắt chế độ Chọn nhiều -->
-          <button @click="toggleSelectMode()" :disabled="task.active"
-                  class="h-9 px-3 rounded-xl text-xs font-semibold border transition inline-flex items-center gap-1.5"
-                  :class="selectMode ? 'bg-slate-200 dark:bg-slate-800 border-slate-400 dark:border-slate-600 text-slate-900 dark:text-white' : 'bg-white dark:bg-darkcard border-slate-200 dark:border-darkborder text-slate-600 dark:text-slate-300'">
-            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3 shadow-sm space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="relative flex-1">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
             </svg>
-            <span x-text="selectMode ? t('cancelSelectBtn') : t('selectAppsBtn')"></span>
-          </button>
+            <input type="text" x-model="appSearch" :placeholder="t('searchAppsPlaceholder')"
+                   class="w-full h-9 pl-9 pr-7 bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-darkborder rounded-xl text-xs focus:outline-none focus:border-blue-500" />
+            <button x-show="appSearch" @click="appSearch = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
 
-          <!-- Nút Sao lưu các mục đã chọn (Hiện khi đang ở chế độ Select) -->
-          <button x-show="selectMode" @click="runSelectedBackups()" :disabled="task.active || selectedApps.length === 0"
-                  class="h-9 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button @click="toggleSelectMode()" :disabled="task.active"
+                    class="h-9 px-3 rounded-xl text-xs font-bold border transition inline-flex items-center gap-1.5"
+                    :class="selectMode ? 'bg-blue-500/15 border-blue-500/50 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-darkborder text-slate-700 dark:text-slate-300'">
+              <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span x-text="selectMode ? t('cancelSelectBtn') : t('selectAppsBtn')"></span>
+            </button>
+
+            <button x-show="!selectMode" @click="runBackup('ALL')" :disabled="task.active"
+                    class="h-9 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
+              </svg>
+              <span x-text="t('backupAll')"></span>
+            </button>
+          </div>
+        </div>
+
+        <div x-show="selectMode" class="pt-2 border-t border-slate-100 dark:border-darkborder flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button type="button" @click="toggleSelectAllApps()"
+                    class="h-8 px-2.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                    x-text="selectedApps.length === filteredContainers().length ? t('deselectAllBtn') : t('selectAllBtn')">
+            </button>
+            <span class="text-xs text-slate-400 font-semibold tabular-nums" x-text="selectedApps.length + ' / ' + data.containers.length + ' ' + t('selectedLabel')"></span>
+          </div>
+
+          <button @click="runSelectedBackups()" :disabled="task.active || selectedApps.length === 0"
+                  class="h-8 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
             </svg>
             <span x-text="t('backupSelectedBtn') + ' (' + selectedApps.length + ')'"></span>
           </button>
-
-          <!-- Nút Backup All mặc định -->
-          <button x-show="!selectMode" @click="runBackup('ALL')" :disabled="task.active"
-                  class="h-9 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/>
-            </svg>
-            <span x-text="t('backupAll')"></span>
-          </button>
         </div>
       </div>
 
+      <!-- Danh sách Container -->
       <div class="space-y-2.5">
-        <template x-for="app in data.containers" :key="app.id">
+        <template x-for="app in filteredContainers()" :key="app.id">
           <div @click="if(selectMode) toggleSelectApp(app.name)"
-               class="bg-white dark:bg-darkcard border rounded-2xl p-4 shadow-sm transition"
-               :class="selectMode && selectedApps.includes(app.name) ? 'border-blue-500 ring-1 ring-blue-500/40 bg-blue-500/5 cursor-pointer' : (selectMode ? 'border-slate-200/80 dark:border-darkborder cursor-pointer' : 'border-slate-200/80 dark:border-darkborder')">
+               class="bg-white dark:bg-darkcard border rounded-2xl p-3.5 shadow-sm"
+               :class="selectMode && selectedApps.includes(app.name)
+                 ? 'border-blue-500 ring-1 ring-blue-500/40 cursor-pointer'
+                 : (selectMode ? 'border-slate-200/90 dark:border-darkborder cursor-pointer' : 'border-slate-200/90 dark:border-darkborder')">
             <div class="flex items-center justify-between gap-2.5">
-              <div x-show="selectMode" class="shrink-0 pr-1">
-                <div class="w-5 h-5 rounded-lg border flex items-center justify-center transition"
+              <div x-show="selectMode" class="shrink-0">
+                <div class="w-5 h-5 rounded-lg border flex items-center justify-center"
                      :class="selectedApps.includes(app.name) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-400 dark:border-slate-600 bg-slate-100 dark:bg-slate-800'">
                   <svg x-show="selectedApps.includes(app.name)" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                   </svg>
                 </div>
               </div>
+
+              <div class="relative shrink-0">
+                <div class="w-10 h-10 rounded-2xl flex items-center justify-center border"
+                     :class="appBadgeStyle(app.name)"
+                     x-html="appSvgIcon(app.name)">
+                </div>
+                <span class="w-2.5 h-2.5 rounded-full border-2 border-white dark:border-darkcard absolute -bottom-0.5 -right-0.5"
+                      :class="app.status === 'running' ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+              </div>
+
               <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-1.5 flex-nowrap min-w-0">
-                  <span class="w-2 h-2 rounded-full shrink-0" :class="app.status === 'running' ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <h3 class="font-bold text-sm sm:text-base truncate" x-text="app.name"></h3>
 
-                  <!-- Compact SSD Pill (Symmetric 3-bar icon) -->
                   <template x-if="app.has_ssd">
-                    <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                      <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 tabular-nums">
+                      <svg class="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <rect x="3" y="3.5" width="18" height="4.5" rx="1.2"/>
                         <rect x="3" y="9.75" width="18" height="4.5" rx="1.2"/>
                         <rect x="3" y="16" width="18" height="4.5" rx="1.2"/>
@@ -532,10 +667,9 @@
                     </span>
                   </template>
 
-                  <!-- Compact Cloud Pill -->
                   <template x-if="app.has_cloud">
-                    <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                      <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 tabular-nums">
+                      <svg class="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
                       </svg>
                       <span x-text="app.cloud_count"></span>
@@ -543,45 +677,67 @@
                   </template>
                 </div>
 
-                <div class="flex items-center gap-2 mt-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
-                  <span class="truncate" x-text="t('lastBackup') + ': ' + (app.latest_backup === 'Chưa có' ? t('none') : app.latest_backup)"></span>
-                  <span>•</span>
-                  <button @click="toggleAppDetail(app.id)" class="text-blue-500 hover:underline font-medium shrink-0">
-                    <span x-text="openDetails[app.id] ? t('hidePaths') : t('viewPaths') + ' (' + app.data_mounts.length + ')'"></span>
+                <div class="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  <svg class="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  <span class="tabular-nums font-medium whitespace-nowrap"
+                        :class="app.latest_backup === 'Chưa có' ? 'text-amber-500' : 'text-slate-600 dark:text-slate-300'"
+                        x-text="app.latest_backup === 'Chưa có' ? t('none') : formatShortTime(app.latest_backup)"></span>
+                  <span class="text-slate-300 dark:text-slate-700">•</span>
+                  <button @click.stop="toggleAppDetail(app.id)"
+                          class="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-bold shrink-0">
+                    <span x-text="openDetails[app.id] ? t('hidePaths') : t('viewPaths')"></span>
+                    <svg class="w-3 h-3" :class="openDetails[app.id] ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                    </svg>
                   </button>
                 </div>
               </div>
 
               <button x-show="!selectMode" @click.stop="runBackup(app.name)" :disabled="task.active"
-                      class="shrink-0 h-9 bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:hover:bg-blue-600 disabled:opacity-50 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 rounded-xl border border-slate-200 dark:border-slate-700 transition inline-flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      class="shrink-0 h-9 bg-slate-100 hover:bg-blue-600 hover:text-white dark:bg-slate-800 dark:hover:bg-blue-600 disabled:opacity-50 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 rounded-xl border border-slate-200 dark:border-slate-700 transition inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
                 </svg>
                 <span x-text="t('backupNow')"></span>
               </button>
             </div>
 
-            <div x-show="openDetails[app.id]" x-transition class="mt-3 pt-3 border-t border-slate-100 dark:border-darkborder text-xs space-y-1.5 text-slate-500 dark:text-slate-400">
-              <div class="flex flex-wrap items-center gap-2 text-[11px]">
-                <span class="font-semibold">Image:</span>
-                <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800" x-text="app.image"></code>
-                <span class="font-semibold ml-1" x-text="t('network') + ':'"></span>
-                <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800" x-text="app.network_mode"></code>
+            <!-- Chi tiết Container (Đóng/mở tức thì 0ms, không dùng x-transition gây khoảng trắng) -->
+            <div x-show="openDetails[app.id]" class="mt-3 pt-3 border-t border-slate-100 dark:border-darkborder space-y-2 text-xs">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">Image</span>
+                  <code class="text-[11px] font-mono text-slate-700 dark:text-slate-200 truncate" x-text="app.image"></code>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2">
+                  <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0" x-text="t('network')"></span>
+                  <code class="text-[11px] font-mono text-blue-500 font-semibold truncate" x-text="app.network_mode"></code>
+                </div>
               </div>
+
               <template x-if="app.data_mounts.length === 0">
-                <div class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-[11px]">
-                  <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-xl text-[11px] font-medium">
+                  <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
                   </svg>
                   <span x-text="t('configOnlyNote')"></span>
                 </div>
               </template>
+
               <template x-for="m in app.data_mounts" :key="m.source">
-                <div class="flex items-center gap-2 font-mono text-[11px] bg-slate-50 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-lg break-all">
-                  <svg class="w-3.5 h-3.5 shrink-0 text-blue-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
-                  </svg>
-                  <span><span class="text-slate-700 dark:text-slate-300" x-text="m.source"></span> → <span x-text="m.destination"></span></span>
+                <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 px-3 py-2 rounded-xl space-y-1 font-mono text-[11px]">
+                  <div class="flex items-center gap-1.5 text-slate-700 dark:text-slate-200 font-semibold truncate">
+                    <svg class="w-3.5 h-3.5 shrink-0 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+                    </svg>
+                    <span class="truncate" x-text="m.source"></span>
+                  </div>
+                  <div class="flex items-center gap-1.5 text-slate-400 pl-5 truncate">
+                    <span>↳</span>
+                    <span class="truncate" x-text="m.destination"></span>
+                  </div>
                 </div>
               </template>
             </div>
@@ -592,28 +748,28 @@
 
     <!-- ================= TAB 2: RESTORE & SNAPSHOTS ================= -->
     <section x-show="activeTab === 'restore'" class="space-y-3">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-1">
-        <div class="flex items-center justify-between sm:justify-start gap-2">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400" x-text="t('restoreTitle')"></h2>
-          <select x-model="filterApp" class="h-8 text-xs bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-xl px-2.5">
-            <option value="ALL" x-text="t('allApps')"></option>
+      <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div class="flex items-center justify-between sm:justify-start gap-2 flex-1">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 pl-1 shrink-0" x-text="t('restoreTitle')"></h2>
+          <select x-model="filterApp" class="h-9 flex-1 sm:flex-initial text-xs font-semibold bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3">
+            <option value="ALL" x-text="t('allApps') + ' (' + data.backups.length + ')'"></option>
             <template x-for="name in data.app_names" :key="name">
               <option :value="name" x-text="name"></option>
             </template>
           </select>
         </div>
 
-        <div class="grid grid-cols-2 sm:flex items-center gap-2">
+        <div class="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
           <button @click="openCloudDialog('push')" :disabled="task.active"
-                  class="h-9 bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 text-xs font-semibold px-3.5 rounded-xl transition inline-flex items-center justify-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  class="h-9 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 disabled:opacity-50 text-xs font-bold px-3.5 rounded-xl transition inline-flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
             </svg>
             <span x-text="t('pushCloud')"></span>
           </button>
           <button @click="openCloudDialog('pull')" :disabled="task.active"
-                  class="h-9 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  class="h-9 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold px-3.5 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
             </svg>
             <span x-text="t('pullCloud')"></span>
@@ -621,24 +777,30 @@
         </div>
       </div>
 
-      <template x-if="filteredBackups().length === 0">
-        <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-10 text-center text-sm text-slate-400" x-text="t('noBackups')"></div>
+      <template x-if="groupedBackups.length === 0">
+        <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-10 text-center text-sm text-slate-400" x-text="t('noBackups')"></div>
       </template>
 
       <div class="space-y-3">
-        <template x-for="b in filteredBackups()" :key="b.app_name">
-          <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-4 shadow-sm space-y-3">
+        <template x-for="b in groupedBackups" :key="b.app_name">
+          <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-4 shadow-sm">
 
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="font-bold text-base text-emerald-600 dark:text-emerald-400 truncate" x-text="b.app_name"></span>
-                <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                      x-text="b.versions_count + ' ' + t('versionsCountLabel')"></span>
+            <!-- Hàng 1: Tên App đầy đủ rộng rãi + Huy hiệu SSD/Cloud -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <div class="w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0"
+                     :class="appBadgeStyle(b.app_name)"
+                     x-html="appSvgIcon(b.app_name)">
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white truncate" x-text="b.app_name"></div>
+                  <div class="text-[11px] font-mono text-slate-400 truncate mt-0.5" x-text="b.image"></div>
+                </div>
               </div>
 
-              <div class="flex items-center gap-1.5 shrink-0">
+              <div class="flex items-center gap-1.5 shrink-0 pt-0.5">
                 <template x-if="b.on_ssd">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <rect x="3" y="3.5" width="18" height="4.5" rx="1.2"/>
                       <rect x="3" y="9.75" width="18" height="4.5" rx="1.2"/>
@@ -649,7 +811,7 @@
                 </template>
 
                 <template x-if="b.on_cloud">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
                     </svg>
@@ -658,36 +820,63 @@
                 </template>
 
                 <template x-if="b.encrypted">
-                  <span class="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold inline-flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/>
-                    </svg>
-                    <span>AES</span>
-                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold">AES</span>
                 </template>
               </div>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-              <div class="flex items-center gap-1.5">
-                <span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium" x-text="b.timestamp_str"></span>
-                <span class="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-500 dark:text-blue-400 font-semibold" x-text="b.size_mb + ' MB'"></span>
+            <!-- Hàng 2: Thanh thông tin Bản mới nhất + Nút bấm xổ danh sách Phiên bản cân đối -->
+            <div class="mt-3 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/70 px-3 py-2 rounded-xl border border-slate-200/70 dark:border-slate-800 text-xs">
+              <div class="flex items-center gap-2 min-w-0 tabular-nums">
+                <span class="font-bold text-slate-700 dark:text-slate-200 truncate" x-text="b.timestamp_str"></span>
+                <span class="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shrink-0" x-text="formatSize(b.size_mb)"></span>
               </div>
-              <div class="text-[11px] font-mono text-slate-500 truncate max-w-[200px] sm:max-w-xs" x-text="b.image + ' • ' + (b.sha256 ? b.sha256.substring(0, 8) : '')"></div>
+
+              <button type="button" @click="toggleVersionList(b.app_name)"
+                      class="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 inline-flex items-center gap-1 tabular-nums">
+                <span x-text="b.versions_count + ' ' + t('versionsCountLabel')"></span>
+                <svg class="w-3 h-3" :class="openVersions[b.app_name] ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                </svg>
+              </button>
             </div>
 
-            <div class="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-darkborder/80">
+            <!-- Danh sách các phiên bản (Đóng/Mở tức thì 0ms, không bị khoảng trắng thừa) -->
+            <div x-show="openVersions[b.app_name]" class="mt-2 space-y-1.5">
+              <template x-for="(ver, vIdx) in b.versions" :key="ver.version_id">
+                <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-xs">
+                  <div class="flex items-center gap-2 min-w-0 tabular-nums">
+                    <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="vIdx === 0 ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                    <span class="font-semibold text-slate-700 dark:text-slate-200 truncate" x-text="ver.timestamp_str"></span>
+                    <span class="text-[11px] text-blue-600 dark:text-blue-400 font-bold shrink-0" x-text="formatSize(ver.size_mb)"></span>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <button type="button" @click="openRestoreDialog(b, ver.version_id)" :disabled="task.active"
+                            class="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]"
+                            x-text="t('restoreShortBtn')">
+                    </button>
+                    <button type="button" @click="openDeleteDialog(b, ver.version_id)" :disabled="task.active"
+                            class="px-2 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-500 font-bold text-[11px]"
+                            x-text="t('deleteBtn')">
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <!-- Hàng 3: Nút Khôi Phục & Xóa -->
+            <div class="mt-3 flex items-center gap-2">
               <button @click="openRestoreDialog(b)" :disabled="task.active"
-                      class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-4 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold px-4 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
                 </svg>
                 <span x-text="t('restoreBtn')"></span>
               </button>
 
               <button @click="openDeleteDialog(b)" :disabled="task.active"
-                      class="h-9 px-3 rounded-xl inline-flex items-center justify-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/25 text-xs font-semibold transition shrink-0">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                      class="h-9 px-3.5 rounded-xl inline-flex items-center justify-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/25 text-xs font-bold transition shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
                 </svg>
                 <span x-text="t('deleteBtn')"></span>
@@ -703,11 +892,13 @@
     <section x-show="activeTab === 'settings'" class="space-y-4">
 
       <!-- Group 1: Policy -->
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
-        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-darkborder pb-2.5">
-          <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/>
-          </svg>
+      <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-center gap-2.5 border-b border-slate-100 dark:border-darkborder pb-3">
+          <div class="w-7 h-7 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/>
+            </svg>
+          </div>
           <h3 class="text-sm font-bold" x-text="t('policySection')"></h3>
         </div>
 
@@ -715,7 +906,7 @@
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('backupMode')"></label>
             <select x-model="data.settings.backup_mode"
-                    class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm">
+                    class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm font-medium">
               <option value="local" x-text="t('modeLocal')"></option>
               <option value="local_cloud" x-text="t('modeLocalCloud')"></option>
               <option value="cloud" x-text="t('modeCloud')"></option>
@@ -725,7 +916,7 @@
           <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('retentionLabel')"></label>
             <input type="number" min="1" max="50" x-model.number="data.settings.retention_count"
-                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm" />
+                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm font-semibold tabular-nums" />
             <p class="text-[11px] text-slate-400 mt-1" x-text="t('retentionHint')"></p>
           </div>
         </div>
@@ -745,18 +936,20 @@
       </div>
 
       <!-- Group 2: Automation & Security -->
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
-        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-darkborder pb-2.5">
-          <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
-          </svg>
+      <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-center gap-2.5 border-b border-slate-100 dark:border-darkborder pb-3">
+          <div class="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/>
+            </svg>
+          </div>
           <h3 class="text-sm font-bold" x-text="t('scheduleSecuritySection')"></h3>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div class="space-y-2">
+          <div class="space-y-2.5">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold" x-text="t('autoSchedule')"></span>
+              <span class="text-xs font-bold" x-text="t('autoSchedule')"></span>
               <button type="button" @click="data.settings.schedule_enabled = !data.settings.schedule_enabled"
                       class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
                       :class="data.settings.schedule_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
@@ -764,54 +957,70 @@
                       :class="data.settings.schedule_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
               </button>
             </div>
-            <input type="text" x-model="data.settings.schedule" placeholder="0 3 * * *"
-                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
-            <p class="text-[11px] text-slate-400" x-text="t('cronHint')"></p>
-                <div class="pt-2 space-y-1.5" x-show="data.settings.schedule_enabled">
-                  <p class="text-[11px] font-medium text-slate-400" x-text="t('autoBackupApps')"></p>
-                  <div class="flex flex-wrap gap-1.5 pt-0.5">
-                    <template x-for="c in data.containers" :key="c.name">
-                      <button type="button"
-                        @click="const ex = [...(data.settings.excluded_auto_apps || [])]; data.settings.excluded_auto_apps = ex.includes(c.name) ? ex.filter(x => x !== c.name) : [...ex, c.name]; data.settings = { ...data.settings }"
-                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all flex items-center gap-1.5"
-                        :class="!(data.settings.excluded_auto_apps || []).includes(c.name) ? 'bg-blue-600/15 border-blue-500/40 text-blue-400' : 'bg-slate-800/40 border-slate-700/50 text-slate-500 line-through opacity-60'">
-                        <span class="w-1.5 h-1.5 rounded-full" :class="!(data.settings.excluded_auto_apps || []).includes(c.name) ? 'bg-blue-400' : 'bg-slate-600'"></span>
-                        <span x-text="c.name"></span>
-                      </button>
-                    </template>
-                  </div>
-                </div>
-          <!-- Khung thiết lập riêng cho Home Assistant -->
-          <div class="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-blue-400" x-text="t('haScheduleTitle')"></span>
-              <button type="button" @click="data.settings.ha_schedule_enabled = !data.settings.ha_schedule_enabled; data.settings = { ...data.settings }"
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
-                :class="data.settings.ha_schedule_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
-                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                  :class="data.settings.ha_schedule_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
-              </button>
-            </div>
-            <div x-show="data.settings.ha_schedule_enabled" class="space-y-2">
-              <select x-model="data.settings.ha_schedule" @change="data.settings = { ...data.settings }"
-                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-medium">
-                <option value="30 3 * * 0" x-text="t('haFreqWeekly')"></option>
-                <option value="30 3 1,15 * *" x-text="t('haFreqBiweekly')"></option>
-                <option value="30 3 1 * *" x-text="t('haFreqMonthly')"></option>
+
+            <div class="flex gap-2">
+              <input type="text" x-model="data.settings.schedule" placeholder="0 3 * * *"
+                     class="flex-1 h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
+              <select @change="if($event.target.value) { data.settings.schedule = $event.target.value; data.settings = { ...data.settings }; }"
+                      class="h-10 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                <option value="">Preset...</option>
+                <option value="0 3 * * *">03:00 AM</option>
+                <option value="0 2 * * *">02:00 AM</option>
+                <option value="0 */12 * * *">12h</option>
               </select>
-              <input type="text" x-model="data.settings.ha_schedule" @input="data.settings = { ...data.settings }" placeholder="30 3 * * 0"
-                class="w-full h-9 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-[11px] font-mono text-slate-400" />
             </div>
-            <label class="flex items-center gap-2 pt-1 cursor-pointer select-none">
-              <input type="checkbox" x-model="data.settings.ha_auto_clean" @change="data.settings = { ...data.settings }" class="rounded border-slate-600 text-blue-600 focus:ring-blue-500 bg-slate-900 w-4 h-4" />
-              <span class="text-[11px] text-slate-300 leading-tight" x-text="t('haCleanLabel')"></span>
-            </label>
-          </div>
+            <p class="text-[11px] text-slate-400" x-text="t('cronHint')"></p>
+
+            <div class="pt-2 space-y-2" x-show="data.settings.schedule_enabled">
+              <p class="text-[11px] font-semibold text-slate-400" x-text="t('autoBackupApps')"></p>
+              <div class="flex flex-wrap gap-1.5">
+                <template x-for="c in data.containers" :key="c.name">
+                  <button type="button"
+                    @click="const ex = [...(data.settings.excluded_auto_apps || [])]; data.settings.excluded_auto_apps = ex.includes(c.name) ? ex.filter(x => x !== c.name) : [...ex, c.name]; data.settings = { ...data.settings }"
+                    class="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border transition flex items-center gap-1.5"
+                    :class="!(data.settings.excluded_auto_apps || []).includes(c.name) ? 'bg-blue-600/15 border-blue-500/40 text-blue-600 dark:text-blue-400' : 'bg-slate-200/60 dark:bg-slate-800/40 border-slate-300 dark:border-slate-700/50 text-slate-400 dark:text-slate-500 line-through opacity-60'">
+                    <span class="w-1.5 h-1.5 rounded-full" :class="!(data.settings.excluded_auto_apps || []).includes(c.name) ? 'bg-blue-500' : 'bg-slate-500'"></span>
+                    <span x-text="c.name"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Khung thiết lập riêng cho Home Assistant -->
+            <div class="mt-3 pt-3.5 border-t border-slate-200/70 dark:border-slate-800/80 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+                  <span class="text-xs font-bold text-sky-600 dark:text-sky-400" x-text="t('haScheduleTitle')"></span>
+                </div>
+                <button type="button" @click="data.settings.ha_schedule_enabled = !data.settings.ha_schedule_enabled; data.settings = { ...data.settings }"
+                  class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
+                  :class="data.settings.ha_schedule_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
+                  <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                    :class="data.settings.ha_schedule_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
+                </button>
+              </div>
+              <div x-show="data.settings.ha_schedule_enabled" class="space-y-2">
+                <select x-model="data.settings.ha_schedule" @change="data.settings = { ...data.settings }"
+                  class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-semibold">
+                  <option value="30 3 * * 0" x-text="t('haFreqWeekly')"></option>
+                  <option value="30 3 1,15 * *" x-text="t('haFreqBiweekly')"></option>
+                  <option value="30 3 1 * *" x-text="t('haFreqMonthly')"></option>
+                </select>
+                <input type="text" x-model="data.settings.ha_schedule" @input="data.settings = { ...data.settings }" placeholder="30 3 * * 0"
+                  class="w-full h-9 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-[11px] font-mono text-slate-400" />
+              </div>
+              <label class="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                <input type="checkbox" x-model="data.settings.ha_auto_clean" @change="data.settings = { ...data.settings }" class="rounded border-slate-600 text-blue-600 focus:ring-blue-500 bg-slate-900 w-4 h-4" />
+                <span class="text-[11px] text-slate-600 dark:text-slate-300 leading-tight font-medium" x-text="t('haCleanLabel')"></span>
+              </label>
+            </div>
           </div>
 
-          <div class="space-y-2">
+          <!-- Cột Phải: Mã hóa AES-256 -->
+          <div class="space-y-2.5">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold" x-text="t('encryptionLabel')"></span>
+              <span class="text-xs font-bold" x-text="t('encryptionLabel')"></span>
               <button type="button" @click="data.settings.encryption_enabled = !data.settings.encryption_enabled"
                       class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out"
                       :class="data.settings.encryption_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'">
@@ -819,24 +1028,38 @@
                       :class="data.settings.encryption_enabled ? 'translate-x-5' : 'translate-x-0'"></span>
               </button>
             </div>
-            <input type="password" x-model="data.settings.encryption_password" :placeholder="t('passwordPlaceholder')"
-                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs" />
+            <div class="relative">
+              <input :type="showEncPassword ? 'text' : 'password'" x-model="data.settings.encryption_password" :placeholder="t('passwordPlaceholder')"
+                     class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl pl-3 pr-10 text-xs" />
+              <button type="button" @click="showEncPassword = !showEncPassword"
+                      class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1">
+                <svg x-show="!showEncPassword" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <svg x-show="showEncPassword" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/>
+                </svg>
+              </button>
+            </div>
             <p class="text-[11px] text-slate-400" x-text="t('encHint')"></p>
           </div>
         </div>
       </div>
 
       <!-- Group 3: Cloud Rclone & 1-Tap Recovery Key -->
-      <div class="bg-white dark:bg-darkcard border border-slate-200/80 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
-        <div class="flex items-center justify-between border-b border-slate-100 dark:border-darkborder pb-2.5">
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
-            </svg>
+      <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-darkborder pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+              </svg>
+            </div>
             <h3 class="text-sm font-bold" x-text="t('cloudSection')"></h3>
           </div>
-          <span class="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
-                :class="data.rclone.configured ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'"
+          <span class="text-[11px] px-2.5 py-0.5 rounded-full font-bold border"
+                :class="data.rclone.configured ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'"
                 x-text="data.rclone.configured ? t('cloudConnected') + ' (' + data.rclone.remotes.join(', ') + ')' : t('cloudNotSet')"></span>
         </div>
 
@@ -847,65 +1070,65 @@
               <input type="text" x-model="data.settings.rclone_remote" placeholder="gdrive:CasaOS_Backups"
                      class="flex-1 h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
               <button @click="showRcloneEditor = !showRcloneEditor"
-                      class="h-10 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 transition whitespace-nowrap"
+                      class="h-10 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 transition whitespace-nowrap"
                       x-text="t('editRcloneBtn')">
               </button>
             </div>
           </div>
 
-          <div x-show="showRcloneEditor" x-transition class="space-y-2 pt-2">
+          <div x-show="showRcloneEditor" class="space-y-2 pt-2">
             <label class="block text-xs text-slate-400"><code>/root/.config/rclone/rclone.conf</code></label>
             <textarea x-model="data.rclone.config_text" rows="5"
                       class="w-full bg-slate-950 text-emerald-400 border border-slate-700 rounded-xl p-3 text-xs font-mono"></textarea>
             <div class="flex justify-end">
-              <button @click="saveRcloneConfig()" class="h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 rounded-xl">
+              <button @click="saveRcloneConfig()" class="h-9 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 rounded-xl">
                 <span x-text="t('saveRcloneBtn')"></span>
               </button>
             </div>
           </div>
 
-          <!-- 1-Tap Recovery Key (Dùng khi cài lại máy mới không cần đăng nhập lại Google) -->
+          <!-- 1-Tap Recovery Key -->
           <div class="pt-3 border-t border-slate-100 dark:border-darkborder space-y-2">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="text-xs font-bold text-purple-400" x-text="t('recoveryKeyTitle')"></div>
-                <div class="text-[11px] text-slate-400" x-text="t('recoveryKeyDesc')"></div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-purple-600 dark:text-purple-400" x-text="t('recoveryKeyTitle')"></div>
+                <div class="text-[11px] text-slate-400 leading-snug" x-text="t('recoveryKeyDesc')"></div>
               </div>
               <div class="flex gap-1.5 shrink-0">
                 <button @click="copyRecoveryKey()"
-                        class="h-8 px-2.5 rounded-lg bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 text-[11px] font-semibold border border-purple-500/30 transition"
+                        class="h-8 px-3 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 hover:bg-purple-500/25 text-[11px] font-bold border border-purple-500/30 transition"
                         x-text="t('exportKeyBtn')">
                 </button>
                 <button @click="showImportKey = !showImportKey"
-                        class="h-8 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 transition"
+                        class="h-8 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] font-bold border border-slate-200 dark:border-slate-700 transition"
                         x-text="t('importKeyBtn')">
                 </button>
               </div>
             </div>
 
-            <div x-show="showImportKey" x-transition class="flex gap-2 pt-1">
+            <div x-show="showImportKey" class="flex gap-2 pt-1">
               <input type="text" x-model="importKeyText" placeholder="CBMKEY:ey..."
                      class="flex-1 h-9 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs font-mono" />
               <button @click="applyRecoveryKey()"
-                      class="h-9 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-3.5 rounded-xl shrink-0"
+                      class="h-9 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold px-3.5 rounded-xl shrink-0"
                       x-text="t('applyKeyBtn')">
               </button>
             </div>
           </div>
 
           <div class="text-xs text-slate-400 flex items-center justify-between pt-1">
-            <span><span x-text="t('lastSync')"></span>: <b class="text-slate-600 dark:text-slate-300" x-text="data.settings.last_cloud_sync"></b></span>
+            <span><span x-text="t('lastSync')"></span>: <b class="text-slate-600 dark:text-slate-300 tabular-nums" x-text="data.settings.last_cloud_sync"></b></span>
           </div>
         </div>
       </div>
 
-      <!-- SMART SAVE BUTTON -->
+      <!-- SMART SAVE BUTTON AT BOTTOM -->
       <div class="flex justify-end pt-1">
         <button @click="saveSettings()"
                 :disabled="!isSettingsDirty() || savingSettings"
-                class="w-full sm:w-auto h-11 text-xs sm:text-sm font-semibold px-6 rounded-2xl transition-all duration-200 inline-flex items-center justify-center gap-2"
+                class="w-full sm:w-auto h-11 text-xs sm:text-sm font-bold px-6 rounded-2xl transition inline-flex items-center justify-center gap-2"
                 :class="isSettingsDirty()
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 cursor-pointer'
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md cursor-pointer'
                   : 'bg-slate-200 dark:bg-slate-800/70 text-slate-400 dark:text-slate-500 border border-slate-300/50 dark:border-slate-700/50 opacity-60 cursor-not-allowed'">
           <svg x-show="!savingSettings" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
@@ -925,6 +1148,7 @@
     const I18N = {
       vi: {
         subtitle: 'Sao lưu & Phục hồi độc lập',
+        refreshBtn: 'Làm mới dữ liệu',
         theme: 'Đổi giao diện Sáng/Tối',
         close: 'Đóng',
         hideProgress: 'Thu gọn',
@@ -932,7 +1156,9 @@
         statApps: 'Ứng dụng',
         running: 'đang chạy',
         statBackups: 'Bản sao lưu',
-        statStorage: 'SSD trống',
+        ssdTelemetryTitle: 'Ổ cứng SSD hệ thống',
+        usedLabel: 'Đã dùng',
+        statStorage: 'Còn trống',
         statCloud: 'Chế độ lưu',
         cloudConnected: 'Đã kết nối Cloud',
         cloudNotSet: 'Chưa kết nối',
@@ -940,16 +1166,20 @@
         tabRestore: 'Khôi phục',
         tabSettings: 'Cài đặt',
         appListTitle: 'Danh sách Container',
+        searchAppsPlaceholder: 'Tìm nhanh container...',
         backupAll: 'Sao lưu tất cả',
         selectAppsBtn: 'Chọn nhiều',
-        cancelSelectBtn: 'Bỏ chọn',
-        backupSelectedBtn: 'Sao lưu mục đã chọn',
+        cancelSelectBtn: 'Đóng chọn',
+        selectAllBtn: 'Chọn tất cả',
+        deselectAllBtn: 'Bỏ chọn hết',
+        selectedLabel: 'đã chọn',
+        backupSelectedBtn: 'Sao lưu mục chọn',
         selectVersionLabel: 'Chọn phiên bản (Mặc định bản mới nhất):',
         versionsCountLabel: 'phiên bản',
         deletingProgress: 'Đang xóa bản sao lưu...',
         processing: 'Đang xử lý...',
         lastBackup: 'Lần cuối',
-        none: 'Chưa có',
+        none: 'Chưa sao lưu',
         viewPaths: 'Chi tiết',
         hidePaths: 'Thu gọn',
         backupNow: 'Sao lưu',
@@ -972,6 +1202,7 @@
         startPullBtn: 'Tải về SSD',
         noBackups: 'Chưa có bản sao lưu nào.',
         restoreBtn: 'Phục hồi ứng dụng',
+        restoreShortBtn: 'Khôi phục',
         deleteBtn: 'Xóa',
         restoreModalTitle: 'Khôi phục Ứng dụng',
         chooseRestoreSource: 'Chọn nguồn dữ liệu khôi phục:',
@@ -998,12 +1229,12 @@
         recreateDesc: 'Bật khi khôi phục trên máy mới cài lại hoặc cần dựng lại cấu hình mạng/biến môi trường.',
         scheduleSecuritySection: 'Lịch tự động & Bảo mật',
         autoSchedule: 'Tự động sao lưu theo lịch (Cron)',
-          haScheduleTitle: 'Lịch sao lưu riêng Home Assistant',
-          haCleanLabel: 'Tự động xóa file rác (.sync-conflict, log cũ) trước khi nén',
-          haFreqWeekly: 'Mỗi 1 tuần (03:30 sáng Chủ Nhật)',
-          haFreqBiweekly: 'Mỗi 2 tuần (03:30 sáng ngày 1 & 15)',
-          haFreqMonthly: 'Mỗi tháng 1 lần (03:30 sáng ngày 1)',
-          autoBackupApps: 'Ứng dụng sao lưu tự động (Bấm để bật/tắt):',
+        haScheduleTitle: 'Lịch sao lưu riêng Home Assistant',
+        haCleanLabel: 'Tự động xóa file rác (.sync-conflict, log cũ) trước khi nén',
+        haFreqWeekly: 'Mỗi 1 tuần (03:30 sáng Chủ Nhật)',
+        haFreqBiweekly: 'Mỗi 2 tuần (03:30 sáng ngày 1 & 15)',
+        haFreqMonthly: 'Mỗi tháng 1 lần (03:30 sáng ngày 1)',
+        autoBackupApps: 'Ứng dụng sao lưu tự động (Bấm để bật/tắt):',
         cronHint: 'Ví dụ: 0 3 * * * (03:00 sáng mỗi ngày cho cả SSD & Cloud)',
         encryptionLabel: 'Mã hóa bản sao lưu (AES-256)',
         passwordPlaceholder: 'Mật khẩu mã hóa / giải mã...',
@@ -1018,19 +1249,24 @@
         importKeyBtn: 'Dán Khóa',
         applyKeyBtn: 'Khôi phục',
         lastSync: 'Đồng bộ lần cuối',
+        unsavedNotice: 'Bạn có thay đổi cài đặt chưa lưu',
+        discardBtn: 'Hoàn tác',
         saveSettingsBtn: 'Lưu thay đổi',
         noChangesBtn: 'Đã lưu mọi thay đổi'
       },
       en: {
         subtitle: 'Self-contained Backup & Recovery',
+        refreshBtn: 'Refresh status',
         theme: 'Toggle Light/Dark Mode',
         close: 'Close',
         hideProgress: 'Minimize',
         cancelTaskBtn: 'Cancel',
-        statApps: 'Applications',
+        statApps: 'Apps',
         running: 'running',
         statBackups: 'Snapshots',
-        statStorage: 'Free SSD',
+        ssdTelemetryTitle: 'System SSD Storage',
+        usedLabel: 'Used',
+        statStorage: 'Free Space',
         statCloud: 'Backup Mode',
         cloudConnected: 'Cloud Ready',
         cloudNotSet: 'Not configured',
@@ -1038,16 +1274,20 @@
         tabRestore: 'Backups',
         tabSettings: 'Settings',
         appListTitle: 'Discovered Containers',
+        searchAppsPlaceholder: 'Filter containers...',
         backupAll: 'Backup All',
         selectAppsBtn: 'Select',
-        cancelSelectBtn: 'Cancel',
+        cancelSelectBtn: 'Done',
+        selectAllBtn: 'Select All',
+        deselectAllBtn: 'Clear All',
+        selectedLabel: 'selected',
         backupSelectedBtn: 'Backup Selected',
         selectVersionLabel: 'Select Version (Latest by default):',
         versionsCountLabel: 'versions',
         deletingProgress: 'Deleting snapshot...',
         processing: 'Working...',
         lastBackup: 'Latest',
-        none: 'Never',
+        none: 'No backup',
         viewPaths: 'Details',
         hidePaths: 'Hide',
         backupNow: 'Backup',
@@ -1070,6 +1310,7 @@
         startPullBtn: 'Pull Now',
         noBackups: 'No backups available yet.',
         restoreBtn: 'Restore Snapshot',
+        restoreShortBtn: 'Restore',
         deleteBtn: 'Delete',
         restoreModalTitle: 'Restore Application',
         chooseRestoreSource: 'Select restore source:',
@@ -1096,12 +1337,12 @@
         recreateDesc: 'Enable for fresh CasaOS installs or to restore network/env.',
         scheduleSecuritySection: 'Automation & Security',
         autoSchedule: 'Scheduled Auto-Backup (Cron)',
-          haScheduleTitle: 'Dedicated Home Assistant Schedule',
-          haCleanLabel: 'Auto-delete junk files (.sync-conflict, old logs) before backup',
-          haFreqWeekly: 'Every 1 Week (Sun at 3:30 AM)',
-          haFreqBiweekly: 'Every 2 Weeks (1st & 15th at 3:30 AM)',
-          haFreqMonthly: 'Monthly (1st of month at 3:30 AM)',
-          autoBackupApps: 'Apps included in Auto-Backup (Tap to toggle):',
+        haScheduleTitle: 'Dedicated Home Assistant Schedule',
+        haCleanLabel: 'Auto-delete junk files (.sync-conflict, old logs) before backup',
+        haFreqWeekly: 'Every 1 Week (Sun at 3:30 AM)',
+        haFreqBiweekly: 'Every 2 Weeks (1st & 15th at 3:30 AM)',
+        haFreqMonthly: 'Monthly (1st of month at 3:30 AM)',
+        autoBackupApps: 'Apps included in Auto-Backup (Tap to toggle):',
         cronHint: 'Example: 0 3 * * * (Daily at 3:00 AM for SSD & Cloud)',
         encryptionLabel: 'Encrypt Archives (AES-256)',
         passwordPlaceholder: 'Encryption password...',
@@ -1116,6 +1357,8 @@
         importKeyBtn: 'Paste Key',
         applyKeyBtn: 'Restore',
         lastSync: 'Last Cloud Sync',
+        unsavedNotice: 'You have unsaved settings changes',
+        discardBtn: 'Reset',
         saveSettingsBtn: 'Save Changes',
         noChangesBtn: 'All Changes Saved'
       }
@@ -1126,9 +1369,13 @@
         lang: localStorage.getItem('cbm_lang') || 'vi',
         darkMode: (localStorage.getItem('cbm_theme') || 'dark') === 'dark',
         activeTab: 'apps',
+        appSearch: '',
         filterApp: 'ALL',
         openDetails: {},
+        openVersions: {},
+        refreshing: false,
         savingSettings: false,
+        showEncPassword: false,
         progressMinimized: false,
         pollTimer: null,
         recreateContainer: localStorage.getItem('cbm_recreate') === 'true',
@@ -1146,7 +1393,7 @@
         restoreModal: { open: false, snap: null, versions: [], selectedVersionId: '', source: 'ssd' },
         deleteModal: { open: false, snap: null, versions: [], selectedVersionId: '' },
         data: {
-          disk: { free_gb: 0, appdata_size_mb: 0, backup_size_mb: 0 },
+          disk: { free_gb: 0, used_gb: 0, total_gb: 0, percent: 0, appdata_size_mb: 0, backup_size_mb: 0 },
           containers: [],
           app_names: [],
           ssd_apps: [],
@@ -1174,6 +1421,60 @@
         applyTheme() {
           document.documentElement.classList.toggle('dark', this.darkMode);
         },
+        async refreshAll() {
+          this.refreshing = true;
+          try {
+            await this.loadOverview(true);
+          } finally {
+            setTimeout(() => { this.refreshing = false; }, 250);
+          }
+        },
+        formatSize(mb) {
+          const val = Number(mb || 0);
+          if (val >= 1024) return (val / 1024).toFixed(2) + ' GB';
+          return val.toFixed(1).replace(/\.0$/, '') + ' MB';
+        },
+        formatShortTime(ts) {
+          if (!ts) return '';
+          return ts.length >= 16 ? ts.substring(0, 16) : ts;
+        },
+        appBadgeStyle(name) {
+          const n = (name || '').toLowerCase();
+          if (n.includes('homeassistant')) return 'bg-sky-500/15 text-sky-500 border-sky-500/30';
+          if (n.includes('scrypted')) return 'bg-purple-500/15 text-purple-500 border-purple-500/30';
+          if (n.includes('zwave')) return 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30';
+          if (n.includes('uptime')) return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30';
+          if (n.includes('cloudflare')) return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+          if (n.includes('syncthing')) return 'bg-cyan-500/15 text-cyan-500 border-cyan-500/30';
+          if (n.includes('portainer')) return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
+          if (n.includes('php') || n.includes('apache') || n.includes('nginx')) return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
+          return 'bg-slate-500/15 text-slate-500 border-slate-500/25';
+        },
+        appSvgIcon(name) {
+          const n = (name || '').toLowerCase();
+          if (n.includes('homeassistant')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>`;
+          }
+          if (n.includes('cloudflare')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>`;
+          }
+          if (n.includes('zwave')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.651a3.75 3.75 0 010-5.303m5.304 0a3.75 3.75 0 010 5.303m-7.425 2.122a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.981 0 13.79M12 12h.008v.007H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`;
+          }
+          if (n.includes('scrypted')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>`;
+          }
+          if (n.includes('uptime')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l4.5-6 4.5 9 4.5-6 3 3"/></svg>`;
+          }
+          if (n.includes('syncthing')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>`;
+          }
+          if (n.includes('portainer')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>`;
+          }
+          return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>`;
+        },
         runningCount() {
           return this.data.containers.filter(c => c.status === 'running').length;
         },
@@ -1181,8 +1482,18 @@
           if (mode === 'local_cloud') return 'Local + Cloud';
           return mode || 'Local';
         },
+        filteredContainers() {
+          const q = (this.appSearch || '').trim().toLowerCase();
+          if (!q) return this.data.containers;
+          return this.data.containers.filter(c =>
+            c.name.toLowerCase().includes(q) || (c.image && c.image.toLowerCase().includes(q))
+          );
+        },
         toggleAppDetail(id) {
           this.openDetails[id] = !this.openDetails[id];
+        },
+        toggleVersionList(appName) {
+          this.openVersions[appName] = !this.openVersions[appName];
         },
         toggleSelectMode() {
           this.selectMode = !this.selectMode;
@@ -1193,6 +1504,14 @@
             this.selectedApps = this.selectedApps.filter(x => x !== name);
           } else {
             this.selectedApps.push(name);
+          }
+        },
+        toggleSelectAllApps() {
+          const visible = this.filteredContainers().map(c => c.name);
+          if (this.selectedApps.length === visible.length) {
+            this.selectedApps = [];
+          } else {
+            this.selectedApps = [...visible];
           }
         },
         async runSelectedBackups() {
@@ -1213,7 +1532,7 @@
             this.showToast(e.message, 'error');
           }
         },
-        filteredBackups() {
+        get groupedBackups() {
           const list = this.filterApp === 'ALL'
             ? (this.data.backups || [])
             : (this.data.backups || []).filter(b => b.app_name === this.filterApp);
@@ -1259,6 +1578,10 @@
         isSettingsDirty() {
           if (!this.originalSettingsJson) return false;
           return this.snapshotSettingsState() !== this.originalSettingsJson || this.recreateContainer !== this.savedRecreateContainer;
+        },
+        async discardSettings() {
+          this.recreateContainer = this.savedRecreateContainer;
+          await this.loadOverview(false);
         },
         showToast(msg, type = 'success') {
           this.toast = { message: msg, type };
@@ -1341,7 +1664,6 @@
             this.cloudModal.loadingList = false;
             this.cloudModal.availableApps = this.data.ssd_apps || [];
           } else {
-            // Khi bấm Pull Cloud -> Quét trực tiếp từ Cloud xem có những file/app nào đang có trên Cloud
             this.cloudModal.loadingList = true;
             this.cloudModal.availableApps = this.data.cloud_apps || [];
             try {
@@ -1349,7 +1671,6 @@
               const out = await this.parseResponse(res);
               this.cloudModal.availableApps = out.apps || [];
             } catch (e) {
-              // Giữ danh sách từ cache nếu lỗi
             } finally {
               this.cloudModal.loadingList = false;
             }
@@ -1379,13 +1700,13 @@
             this.showToast(e.message, 'error');
           }
         },
-        openRestoreDialog(groupSnap) {
+        openRestoreDialog(groupSnap, specificVerId = null) {
           const versions = groupSnap.versions || [groupSnap];
-          const latest = versions[0];
+          const chosen = (specificVerId && versions.find(v => v.version_id === specificVerId)) || versions[0];
           this.restoreModal.versions = versions;
-          this.restoreModal.selectedVersionId = latest.version_id;
-          this.restoreModal.snap = latest;
-          this.restoreModal.source = latest.on_ssd ? 'ssd' : 'cloud';
+          this.restoreModal.selectedVersionId = chosen.version_id;
+          this.restoreModal.snap = chosen;
+          this.restoreModal.source = chosen.on_ssd ? 'ssd' : 'cloud';
           this.restoreModal.open = true;
         },
         onRestoreVersionChange() {
@@ -1425,12 +1746,12 @@
             this.showToast(e.message, 'error');
           }
         },
-        openDeleteDialog(groupSnap) {
+        openDeleteDialog(groupSnap, specificVerId = null) {
           const versions = groupSnap.versions || [groupSnap];
-          const latest = versions[0];
+          const chosen = (specificVerId && versions.find(v => v.version_id === specificVerId)) || versions[0];
           this.deleteModal.versions = versions;
-          this.deleteModal.selectedVersionId = latest.version_id;
-          this.deleteModal.snap = latest;
+          this.deleteModal.selectedVersionId = chosen.version_id;
+          this.deleteModal.snap = chosen;
           this.deletingBackup = false;
           this.deleteModal.open = true;
         },
@@ -1503,29 +1824,29 @@
             const res = await fetch('/api/recovery-key');
             const out = await this.parseResponse(res);
             await ((text) => {
-            if (navigator.clipboard && window.isSecureContext) {
+              if (navigator.clipboard && window.isSecureContext) {
                 return navigator.clipboard.writeText(text);
-            } else {
+              } else {
                 return new Promise((resolve, reject) => {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.style.position = 'fixed';
-                    ta.style.left = '-9999px';
-                    ta.style.top = '0';
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.select();
-                    try {
-                        document.execCommand('copy');
-                        document.body.removeChild(ta);
-                        resolve();
-                    } catch (e) {
-                        document.body.removeChild(ta);
-                        reject(e);
-                    }
+                  const ta = document.createElement('textarea');
+                  ta.value = text;
+                  ta.style.position = 'fixed';
+                  ta.style.left = '-9999px';
+                  ta.style.top = '0';
+                  document.body.appendChild(ta);
+                  ta.focus();
+                  ta.select();
+                  try {
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    resolve();
+                  } catch (e) {
+                    document.body.removeChild(ta);
+                    reject(e);
+                  }
                 });
-            }
-        })(out.recovery_key);
+              }
+            })(out.recovery_key);
             this.showToast(this.lang === 'vi' ? 'Đã sao chép Khóa Khôi Phục vào bộ nhớ tạm! Hãy dán vào Ghi chú iPhone.' : 'Recovery Key copied to clipboard! Save it.');
           } catch (e) {
             this.showToast(e.message, 'error');

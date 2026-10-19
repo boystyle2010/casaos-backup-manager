@@ -140,7 +140,13 @@ def sha256sum(filepath: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
-def get_dir_size_mb(path: Path) -> float:
+_DIR_SIZE_CACHE = {}
+
+def get_dir_size_mb(path: Path, ttl: int = 45) -> float:
+    now = time.time()
+    key = str(path)
+    if key in _DIR_SIZE_CACHE and (now - _DIR_SIZE_CACHE[key][0]) < ttl:
+        return _DIR_SIZE_CACHE[key][1]
     total = 0
     if not path.exists():
         return 0.0
@@ -152,7 +158,9 @@ def get_dir_size_mb(path: Path) -> float:
                     total += os.path.getsize(fp)
                 except OSError:
                     pass
-    return round(total / (1024 * 1024), 2)
+    val = round(total / (1024 * 1024), 2)
+    _DIR_SIZE_CACHE[key] = (now, val)
+    return val
 
 def should_backup_mount(source: str) -> bool:
     for ignored in IGNORED_MOUNT_SOURCES:
@@ -892,11 +900,11 @@ def api_overview(refresh_cloud: bool = False):
         "cloud_apps": cloud_apps,
         "backups": merged_backups,
         "settings": settings,
-        "rclone": {
-            "configured": len(get_rclone_remotes()) > 0,
-            "remotes": get_rclone_remotes(),
+        "rclone": (lambda r: {
+            "configured": len(r) > 0,
+            "remotes": r,
             "config_text": rclone_conf_content
-        },
+        })(get_rclone_remotes()),
         "task": TASK_STATE
     }
 
