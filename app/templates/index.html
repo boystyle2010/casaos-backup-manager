@@ -157,7 +157,100 @@
     </div>
   </div>
 
-  <!-- 4. MODAL PUSH / PULL CLOUD -->
+  <!-- 4. MODAL BÁO CÁO PHIÊN SAO LƯU CHO ADMIN (Tự bật khi Admin đăng nhập lần đầu sau phiên chạy) -->
+  <div x-show="reportModal.open" x-transition.opacity.duration.150ms
+       class="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-4">
+    <div @click.away="acknowledgeAdminReport()"
+         class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+      <div class="flex items-start justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-2xl flex items-center justify-center shrink-0"
+               :class="data.last_report?.has_warnings ? 'bg-amber-500/15 text-amber-500' : 'bg-emerald-500/15 text-emerald-500'">
+            <svg x-show="data.last_report?.has_warnings" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <svg x-show="!data.last_report?.has_warnings" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold leading-tight" x-text="t('adminReportTitle')"></h3>
+            <p class="text-[11px] text-slate-400 tabular-nums mt-0.5"
+               x-text="(data.last_report?.timestamp || '') + (data.last_report?.trigger_type ? ' • ' + data.last_report.trigger_type : '')"></p>
+          </div>
+        </div>
+        <button @click="acknowledgeAdminReport()" class="p-1 text-slate-400 hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto space-y-3.5 pr-1 flex-1">
+        <!-- Phần 1: Các ứng dụng bị Bỏ qua / Quá dung lượng -->
+        <template x-if="(data.last_report?.skipped?.length || 0) > 0">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-bold text-amber-500">
+              <span x-text="t('reportSkippedHeader') + ' (' + data.last_report.skipped.length + ')'"></span>
+            </div>
+            <div class="space-y-1.5">
+              <template x-for="item in data.last_report.skipped" :key="item.app_name">
+                <div class="p-3 rounded-2xl border text-xs space-y-1"
+                     :class="item.type === 'excluded'
+                       ? 'bg-slate-100/80 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 text-slate-500'
+                       : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300'">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-extrabold text-sm" x-text="item.app_name"></span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase"
+                          :class="item.type === 'excluded' ? 'bg-slate-500/20 text-slate-400' : 'bg-rose-500/20 text-rose-400'"
+                          x-text="item.type === 'excluded' ? t('tagExcluded') : t('tagSkipped')"></span>
+                  </div>
+                  <p class="text-[11px] leading-snug opacity-90" x-text="item.reason"></p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Phần 2: Các ứng dụng đã Sao lưu thành công -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400">
+            <span x-text="t('reportSuccessHeader') + ' (' + (data.last_report?.succeeded?.length || 0) + ')'"></span>
+          </div>
+
+          <template x-if="(data.last_report?.succeeded?.length || 0) === 0">
+            <div class="p-3 rounded-2xl bg-slate-100 dark:bg-slate-900 text-xs text-slate-400 text-center" x-text="t('noSuccessInReport')"></div>
+          </template>
+
+          <div class="space-y-1.5">
+            <template x-for="okItem in (data.last_report?.succeeded || [])" :key="okItem.app_name">
+              <div class="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                  <span class="font-bold text-slate-800 dark:text-slate-200 truncate" x-text="okItem.app_name"></span>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0 tabular-nums">
+                  <span class="text-[11px] font-bold text-blue-600 dark:text-blue-400" x-text="formatSize(okItem.size_mb)"></span>
+                  <template x-if="okItem.synced_cloud">
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 border border-purple-500/25">Cloud</span>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 shrink-0">
+        <button @click="acknowledgeAdminReport()"
+                class="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition"
+                x-text="t('ackReportBtn')">
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. MODAL PUSH / PULL CLOUD -->
   <div x-show="cloudModal.open" x-transition.opacity.duration.150ms
        class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="cloudModal.open = false"
@@ -224,7 +317,7 @@
     </div>
   </div>
 
-  <!-- 5. MODAL CHỌN NGUỒN & PHIÊN BẢN KHÔI PHỤC -->
+  <!-- 6. MODAL CHỌN NGUỒN & PHIÊN BẢN KHÔI PHỤC -->
   <div x-show="restoreModal.open" x-transition.opacity.duration.150ms
        class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="restoreModal.open = false"
@@ -322,24 +415,33 @@
     </div>
   </div>
 
-  <!-- 6. MODAL CHỌN NƠI XÓA -->
+  <!-- 7. MODAL CHỌN NƠI XÓA -->
   <div x-show="deleteModal.open" x-transition.opacity.duration.150ms
        class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="if(!deletingBackup) deleteModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <div class="flex items-center justify-between">
         <h3 class="text-base font-bold text-rose-500" x-text="t('deleteModalTitle')"></h3>
-        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[140px]" x-text="deleteModal.snap?.app_name"></span>
+        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[150px]" x-text="deleteModal.snap?.app_name"></span>
       </div>
 
-      <div class="space-y-1">
-        <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400" x-text="t('selectVersionLabel')"></label>
+      <div class="space-y-1.5">
+        <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400" x-text="t('selectDeleteScopeLabel')"></label>
         <select x-model="deleteModal.selectedVersionId" @change="onDeleteVersionChange()" :disabled="deletingBackup"
-                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-xs font-semibold tabular-nums">
+                class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-xs font-semibold tabular-nums"
+                :class="deleteModal.selectedVersionId === 'ALL' ? 'text-rose-500 border-rose-500/50 bg-rose-500/5' : ''">
+          <template x-if="(deleteModal.versions?.length || 0) > 1">
+            <option value="ALL" x-text="'🔥 ' + t('deleteAllVersionsOption') + ' (' + deleteModal.versions.length + ' ' + t('versionsCountLabel') + ' • ' + formatSize(deleteModal.totalSizeMb) + ')'"></option>
+          </template>
           <template x-for="(v, idx) in deleteModal.versions" :key="v.version_id">
             <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? ' (Latest)' : '')"></option>
           </template>
         </select>
+      </div>
+
+      <div x-show="deleteModal.selectedVersionId === 'ALL' && !deletingBackup"
+           class="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-500 dark:text-rose-400 font-semibold leading-snug"
+           x-text="t('deleteAllWarning')">
       </div>
 
       <div x-show="deletingBackup" class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center gap-2.5 text-xs font-semibold text-rose-500">
@@ -353,18 +455,18 @@
       <div class="space-y-2" x-show="!deletingBackup">
         <button x-show="deleteModal.snap?.on_ssd && deleteModal.snap?.on_cloud"
                 @click="confirmDelete('both')"
-                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition"
-                x-text="t('deleteBoth')">
+                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-sm"
+                x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllBoth') : t('deleteBoth')">
         </button>
         <button x-show="deleteModal.snap?.on_ssd"
                 @click="confirmDelete('ssd')"
                 class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
-                x-text="t('deleteSsdOnly')">
+                x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllSsdOnly') : t('deleteSsdOnly')">
         </button>
         <button x-show="deleteModal.snap?.on_cloud"
                 @click="confirmDelete('cloud')"
                 class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
-                x-text="t('deleteCloudOnly')">
+                x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllCloudOnly') : t('deleteCloudOnly')">
         </button>
         <button @click="deleteModal.open = false"
                 class="w-full h-10 rounded-xl text-xs font-semibold text-slate-400"
@@ -377,20 +479,27 @@
   <!-- ================= MAIN CONTAINER ================= -->
   <div class="relative z-10 max-w-3xl mx-auto px-3.5 sm:px-5 pt-3.5 space-y-3.5">
 
-    <!-- TOP HEADER BAR (Nền đặc chuẩn xác, không dùng backdrop-blur gây lỗi biến mất trên iOS Safari) -->
+    <!-- TOP HEADER BAR (Giữ đúng 3 nút bên phải để không bao giờ bị chật trên iPhone; chạm vào dòng phụ đề để mở Báo cáo Admin) -->
     <header class="flex items-center justify-between gap-3 bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3.5 shadow-sm">
-      <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-sm shrink-0">
+      <div @click="reportModal.open = true" class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group">
+        <div class="relative w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-sm shrink-0">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
           </svg>
+          <!-- Chấm báo hiệu nhỏ ngay trên góc Logo nếu có báo cáo mới hoặc có cảnh báo -->
+          <span x-show="data.last_report?.unread_by_admin || data.last_report?.has_warnings"
+                class="w-3 h-3 rounded-full absolute -top-1 -right-1 border-2 border-white dark:border-darkcard"
+                :class="data.last_report?.has_warnings ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"></span>
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
             <h1 class="text-base font-extrabold tracking-tight truncate">CasaOS Backup</h1>
-            <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">PRO</span>
+            <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 shrink-0">PRO</span>
           </div>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" x-text="t('subtitle')"></p>
+          <p class="text-[11px] truncate flex items-center gap-1"
+             :class="data.last_report?.has_warnings ? 'text-amber-500 font-semibold' : 'text-slate-500 dark:text-slate-400 group-hover:text-blue-400'">
+            <span class="truncate" x-text="headerReportSummary()"></span>
+          </p>
         </div>
       </div>
 
@@ -423,6 +532,24 @@
         </button>
       </div>
     </header>
+
+    <!-- BANNER CẢNH BÁO TỰ ĐỘNG (Chỉ xuất hiện khi có Container bị bỏ qua do quá dung lượng và chưa được Admin đóng) -->
+    <div x-show="data.last_report && data.last_report.has_warnings && data.last_report.unread_by_admin"
+         @click="reportModal.open = true"
+         class="cursor-pointer bg-amber-500/10 border border-amber-500/35 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-sm">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="text-xs font-extrabold text-amber-600 dark:text-amber-400 truncate" x-text="t('bannerWarningTitle')"></div>
+          <div class="text-[11px] text-slate-600 dark:text-slate-300 truncate" x-text="t('bannerWarningDesc')"></div>
+        </div>
+      </div>
+      <span class="shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-amber-500 text-white" x-text="t('viewReportBtn')"></span>
+    </div>
 
     <!-- BENTO TELEMETRY DASHBOARD -->
     <section class="space-y-3">
@@ -530,7 +657,11 @@
               <span>Backups: <b class="text-slate-700 dark:text-slate-200" x-text="formatSize(data.disk.backup_size_mb)"></b></span>
             </span>
           </div>
-          <span class="text-[10px] font-mono text-slate-400">/DATA</span>
+          <button type="button" @click="reportModal.open = true"
+                  class="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+            <span x-text="t('viewLastReportLink')"></span>
+            <span>→</span>
+          </button>
         </div>
       </div>
     </section>
@@ -704,7 +835,7 @@
               </button>
             </div>
 
-            <!-- Chi tiết Container (Đóng/mở tức thì 0ms, không dùng x-transition gây khoảng trắng) -->
+            <!-- Chi tiết Container -->
             <div x-show="openDetails[app.id]" class="mt-3 pt-3 border-t border-slate-100 dark:border-darkborder space-y-2 text-xs">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2">
@@ -785,7 +916,6 @@
         <template x-for="b in groupedBackups" :key="b.app_name">
           <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-4 shadow-sm">
 
-            <!-- Hàng 1: Tên App đầy đủ rộng rãi + Huy hiệu SSD/Cloud -->
             <div class="flex items-start justify-between gap-2">
               <div class="flex items-center gap-2.5 min-w-0 flex-1">
                 <div class="w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0"
@@ -825,7 +955,6 @@
               </div>
             </div>
 
-            <!-- Hàng 2: Thanh thông tin Bản mới nhất + Nút bấm xổ danh sách Phiên bản cân đối -->
             <div class="mt-3 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/70 px-3 py-2 rounded-xl border border-slate-200/70 dark:border-slate-800 text-xs">
               <div class="flex items-center gap-2 min-w-0 tabular-nums">
                 <span class="font-bold text-slate-700 dark:text-slate-200 truncate" x-text="b.timestamp_str"></span>
@@ -841,7 +970,6 @@
               </button>
             </div>
 
-            <!-- Danh sách các phiên bản (Đóng/Mở tức thì 0ms, không bị khoảng trắng thừa) -->
             <div x-show="openVersions[b.app_name]" class="mt-2 space-y-1.5">
               <template x-for="(ver, vIdx) in b.versions" :key="ver.version_id">
                 <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-xs">
@@ -864,7 +992,6 @@
               </template>
             </div>
 
-            <!-- Hàng 3: Nút Khôi Phục & Xóa -->
             <div class="mt-3 flex items-center gap-2">
               <button @click="openRestoreDialog(b)" :disabled="task.active"
                       class="flex-1 h-9 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold px-4 rounded-xl shadow-sm transition inline-flex items-center justify-center gap-1.5">
@@ -891,7 +1018,7 @@
     <!-- ================= TAB 3: SETTINGS ================= -->
     <section x-show="activeTab === 'settings'" class="space-y-4">
 
-      <!-- Group 1: Policy -->
+      <!-- Group 1: Policy & Smart Disk Guard -->
       <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-5 space-y-4 shadow-sm">
         <div class="flex items-center gap-2.5 border-b border-slate-100 dark:border-darkborder pb-3">
           <div class="w-7 h-7 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
@@ -918,6 +1045,23 @@
             <input type="number" min="1" max="50" x-model.number="data.settings.retention_count"
                    class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm font-semibold tabular-nums" />
             <p class="text-[11px] text-slate-400 mt-1" x-text="t('retentionHint')"></p>
+          </div>
+        </div>
+
+        <!-- 2 Ô Giới hạn Bảo vệ Chống tràn SSD -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-100 dark:border-darkborder">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('maxAppSizeLabel')"></label>
+            <input type="number" min="1" max="200" step="1" x-model.number="data.settings.max_app_size_gb"
+                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm font-semibold tabular-nums" />
+            <p class="text-[11px] text-slate-400 mt-1" x-text="t('maxAppSizeHint')"></p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5" x-text="t('minFreeSsdLabel')"></label>
+            <input type="number" min="1" max="100" step="1" x-model.number="data.settings.min_free_ssd_gb"
+                   class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3 text-xs sm:text-sm font-semibold tabular-nums" />
+            <p class="text-[11px] text-slate-400 mt-1" x-text="t('minFreeSsdHint')"></p>
           </div>
         </div>
 
@@ -986,7 +1130,6 @@
               </div>
             </div>
 
-            <!-- Khung thiết lập riêng cho Home Assistant -->
             <div class="mt-3 pt-3.5 border-t border-slate-200/70 dark:border-slate-800/80 space-y-2.5">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
@@ -1017,7 +1160,6 @@
             </div>
           </div>
 
-          <!-- Cột Phải: Mã hóa AES-256 -->
           <div class="space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-bold" x-text="t('encryptionLabel')"></span>
@@ -1153,6 +1295,17 @@
         close: 'Đóng',
         hideProgress: 'Thu gọn',
         cancelTaskBtn: 'Hủy',
+        adminReportTitle: 'Báo cáo Phiên Sao lưu (Admin)',
+        reportSkippedHeader: 'Ứng dụng đã bỏ qua / Cần kiểm tra',
+        reportSuccessHeader: 'Ứng dụng đã sao lưu thành công',
+        noSuccessInReport: 'Không có ứng dụng nào được sao lưu trong phiên này.',
+        tagExcluded: 'Loại trừ tự động',
+        tagSkipped: 'Đã bỏ qua',
+        ackReportBtn: 'Đã kiểm tra & Đóng thông báo',
+        bannerWarningTitle: 'Có Container bị bỏ qua trong phiên sao lưu gần nhất!',
+        bannerWarningDesc: 'Nhấn để xem danh sách ứng dụng đã lưu và lý do bỏ qua.',
+        viewReportBtn: 'Xem báo cáo',
+        viewLastReportLink: 'Báo cáo phiên gần nhất',
         statApps: 'Ứng dụng',
         running: 'đang chạy',
         statBackups: 'Bản sao lưu',
@@ -1175,6 +1328,9 @@
         selectedLabel: 'đã chọn',
         backupSelectedBtn: 'Sao lưu mục chọn',
         selectVersionLabel: 'Chọn phiên bản (Mặc định bản mới nhất):',
+        selectDeleteScopeLabel: 'Chọn phạm vi xóa:',
+        deleteAllVersionsOption: 'XÓA TẤT CẢ CÁC PHIÊN BẢN',
+        deleteAllWarning: 'Tất cả các bản sao lưu của ứng dụng này qua các ngày sẽ bị xóa vĩnh viễn theo vị trí bạn chọn bên dưới.',
         versionsCountLabel: 'phiên bản',
         deletingProgress: 'Đang xóa bản sao lưu...',
         processing: 'Đang xử lý...',
@@ -1215,16 +1371,23 @@
         cancelBtn: 'Hủy',
         confirmRestoreBtn: 'Bắt đầu Phục hồi',
         deleteModalTitle: 'Xóa bản sao lưu',
-        deleteBoth: 'Xóa trên cả SSD & Cloud',
-        deleteSsdOnly: 'Chỉ xóa trên SSD (Giữ bản trên Cloud)',
-        deleteCloudOnly: 'Chỉ xóa trên Cloud (Giữ bản trên SSD)',
-        policySection: 'Chính sách Sao lưu & Khôi phục',
+        deleteBoth: 'Xóa phiên bản này trên cả SSD & Cloud',
+        deleteSsdOnly: 'Chỉ xóa phiên bản này trên SSD (Giữ Cloud)',
+        deleteCloudOnly: 'Chỉ xóa phiên bản này trên Cloud (Giữ SSD)',
+        deleteAllBoth: 'Xóa TẤT CẢ trên cả SSD & Cloud',
+        deleteAllSsdOnly: 'Chỉ xóa TẤT CẢ trên SSD (Giữ trên Cloud)',
+        deleteAllCloudOnly: 'Chỉ xóa TẤT CẢ trên Cloud (Giữ trên SSD)',
+        policySection: 'Chính sách Sao lưu & Bảo vệ SSD',
         backupMode: 'Chế độ lưu trữ',
         modeLocal: 'Chỉ lưu trên SSD nội bộ (Local)',
         modeLocalCloud: 'Lưu SSD + Tự động đẩy lên Cloud',
         modeCloud: 'Chỉ lưu trên Cloud (Xóa bản SSD sau khi tải lên)',
         retentionLabel: 'Số bản lưu giữ lại tối đa / ứng dụng',
         retentionHint: 'Tự động xóa bản cũ vượt quá số lượng này trên cả SSD và Cloud',
+        maxAppSizeLabel: 'Giới hạn dung lượng tối đa / container (GB)',
+        maxAppSizeHint: 'Nếu container phình vượt mức này sẽ tự động bỏ qua ngay lập tức',
+        minFreeSsdLabel: 'Bảo vệ dung lượng SSD trống tối thiểu (GB)',
+        minFreeSsdHint: 'Ngắt & xóa file tạm nếu SSD tụt xuống dưới mức an toàn này',
         recreateLabel: 'Tái tạo lại Container khi khôi phục',
         recreateDesc: 'Bật khi khôi phục trên máy mới cài lại hoặc cần dựng lại cấu hình mạng/biến môi trường.',
         scheduleSecuritySection: 'Lịch tự động & Bảo mật',
@@ -1261,6 +1424,17 @@
         close: 'Close',
         hideProgress: 'Minimize',
         cancelTaskBtn: 'Cancel',
+        adminReportTitle: 'Backup Session Report (Admin)',
+        reportSkippedHeader: 'Skipped / Needs Attention',
+        reportSuccessHeader: 'Successfully Backed Up',
+        noSuccessInReport: 'No containers were backed up in this session.',
+        tagExcluded: 'Auto-Excluded',
+        tagSkipped: 'Skipped',
+        ackReportBtn: 'Acknowledge & Dismiss',
+        bannerWarningTitle: 'Containers skipped in latest backup session!',
+        bannerWarningDesc: 'Tap here to review backed up apps and skip reasons.',
+        viewReportBtn: 'View Report',
+        viewLastReportLink: 'Last Session Report',
         statApps: 'Apps',
         running: 'running',
         statBackups: 'Snapshots',
@@ -1283,6 +1457,9 @@
         selectedLabel: 'selected',
         backupSelectedBtn: 'Backup Selected',
         selectVersionLabel: 'Select Version (Latest by default):',
+        selectDeleteScopeLabel: 'Select delete scope:',
+        deleteAllVersionsOption: 'DELETE ALL VERSIONS',
+        deleteAllWarning: 'All snapshots of this container across all dates will be permanently removed from the selected storage.',
         versionsCountLabel: 'versions',
         deletingProgress: 'Deleting snapshot...',
         processing: 'Working...',
@@ -1323,16 +1500,23 @@
         cancelBtn: 'Cancel',
         confirmRestoreBtn: 'Start Restore',
         deleteModalTitle: 'Delete Snapshot',
-        deleteBoth: 'Delete from both SSD & Cloud',
-        deleteSsdOnly: 'Delete from SSD only (Keep on Cloud)',
-        deleteCloudOnly: 'Delete from Cloud only (Keep on SSD)',
-        policySection: 'Backup & Restore Policy',
+        deleteBoth: 'Delete this version from SSD & Cloud',
+        deleteSsdOnly: 'Delete this version from SSD only',
+        deleteCloudOnly: 'Delete this version from Cloud only',
+        deleteAllBoth: 'Delete ALL versions from SSD & Cloud',
+        deleteAllSsdOnly: 'Delete ALL versions from SSD only (Keep Cloud)',
+        deleteAllCloudOnly: 'Delete ALL versions from Cloud only (Keep SSD)',
+        policySection: 'Backup Policy & SSD Guard',
         backupMode: 'Storage Mode',
         modeLocal: 'Local SSD Only',
         modeLocalCloud: 'Local SSD + Auto Cloud Sync',
         modeCloud: 'Cloud Only (Remove local after upload)',
         retentionLabel: 'Max versions kept per app',
         retentionHint: 'Auto-prunes older versions on both Local SSD and Cloud',
+        maxAppSizeLabel: 'Max size limit per container (GB)',
+        maxAppSizeHint: 'Auto-skip container immediately if its data exceeds this limit',
+        minFreeSsdLabel: 'Minimum free SSD space guard (GB)',
+        minFreeSsdHint: 'Abort & clean temp files if free SSD space drops below this',
         recreateLabel: 'Recreate Container on Restore',
         recreateDesc: 'Enable for fresh CasaOS installs or to restore network/env.',
         scheduleSecuritySection: 'Automation & Security',
@@ -1389,9 +1573,10 @@
         selectMode: false,
         selectedApps: [],
         deletingBackup: false,
+        reportModal: { open: false },
         cloudModal: { open: false, mode: 'push', targetApp: 'ALL', availableApps: [], loadingList: false },
         restoreModal: { open: false, snap: null, versions: [], selectedVersionId: '', source: 'ssd' },
-        deleteModal: { open: false, snap: null, versions: [], selectedVersionId: '' },
+        deleteModal: { open: false, groupSnap: null, snap: null, versions: [], selectedVersionId: '', totalSizeMb: 0 },
         data: {
           disk: { free_gb: 0, used_gb: 0, total_gb: 0, percent: 0, appdata_size_mb: 0, backup_size_mb: 0 },
           containers: [],
@@ -1399,7 +1584,17 @@
           ssd_apps: [],
           cloud_apps: [],
           backups: [],
-          settings: { backup_mode: 'local_cloud', retention_count: 5, excluded_auto_apps: [], ha_schedule_enabled: true, ha_schedule: '30 3 * * 0', ha_auto_clean: true },
+          last_report: { report_id: '', timestamp: '', trigger_type: '', unread_by_admin: false, has_warnings: false, succeeded: [], skipped: [] },
+          settings: {
+            backup_mode: 'local_cloud',
+            retention_count: 5,
+            max_app_size_gb: 10,
+            min_free_ssd_gb: 5,
+            excluded_auto_apps: [],
+            ha_schedule_enabled: true,
+            ha_schedule: '30 3 * * 0',
+            ha_auto_clean: true
+          },
           rclone: { configured: false, remotes: [], config_text: '' }
         },
         initApp() {
@@ -1408,6 +1603,20 @@
         },
         t(key) {
           return (I18N[this.lang] && I18N[this.lang][key]) || key;
+        },
+        headerReportSummary() {
+          const r = this.data.last_report;
+          if (!r || !r.report_id) return this.t('subtitle');
+          const okCount = (r.succeeded || []).length;
+          const skipCount = (r.skipped || []).length;
+          if (this.lang === 'vi') {
+            return skipCount > 0
+              ? `⚠ Đã lưu ${okCount}, bỏ qua ${skipCount} • Xem báo cáo`
+              : `✓ Đã lưu ${okCount} app gần nhất • Xem báo cáo`;
+          }
+          return skipCount > 0
+            ? `⚠ ${okCount} saved, ${skipCount} skipped • View report`
+            : `✓ ${okCount} apps backed up • View report`;
         },
         toggleLang() {
           this.lang = this.lang === 'vi' ? 'en' : 'vi';
@@ -1432,7 +1641,7 @@
         formatSize(mb) {
           const val = Number(mb || 0);
           if (val >= 1024) return (val / 1024).toFixed(2) + ' GB';
-          return val.toFixed(1).replace(/\.0$/, '') + ' MB';
+          return val.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1') + ' MB';
         },
         formatShortTime(ts) {
           if (!ts) return '';
@@ -1447,13 +1656,16 @@
           if (n.includes('cloudflare')) return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
           if (n.includes('syncthing')) return 'bg-cyan-500/15 text-cyan-500 border-cyan-500/30';
           if (n.includes('portainer')) return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
+          if (n.includes('filebrowser')) return 'bg-orange-500/15 text-orange-500 border-orange-500/30';
+          if (n.includes('beszel') || n.includes('glances')) return 'bg-teal-500/15 text-teal-500 border-teal-500/30';
+          if (n.includes('scrutiny')) return 'bg-violet-500/15 text-violet-500 border-violet-500/30';
           if (n.includes('php') || n.includes('apache') || n.includes('nginx')) return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
           return 'bg-slate-500/15 text-slate-500 border-slate-500/25';
         },
         appSvgIcon(name) {
           const n = (name || '').toLowerCase();
           if (n.includes('homeassistant')) {
-            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>`;
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 .125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>`;
           }
           if (n.includes('cloudflare')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>`;
@@ -1464,8 +1676,14 @@
           if (n.includes('scrypted')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>`;
           }
-          if (n.includes('uptime')) {
+          if (n.includes('uptime') || n.includes('beszel') || n.includes('glances')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l4.5-6 4.5 9 4.5-6 3 3"/></svg>`;
+          }
+          if (n.includes('scrutiny')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/><rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/><rect x="3" y="16" width="18" height="4.5" rx="1.5"/></svg>`;
+          }
+          if (n.includes('filebrowser')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>`;
           }
           if (n.includes('syncthing')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>`;
@@ -1564,6 +1782,8 @@
           return JSON.stringify({
             backup_mode: s.backup_mode,
             retention_count: Number(s.retention_count),
+            max_app_size_gb: Number(s.max_app_size_gb || 10),
+            min_free_ssd_gb: Number(s.min_free_ssd_gb || 5),
             schedule_enabled: Boolean(s.schedule_enabled),
             schedule: s.schedule,
             excluded_auto_apps: [...(s.excluded_auto_apps || [])].sort(),
@@ -1601,6 +1821,12 @@
             const out = await this.parseResponse(res);
             this.data = out;
             this.originalSettingsJson = this.snapshotSettingsState();
+
+            // Tự động bật Popup Báo cáo cho Admin khi đăng nhập lần đầu sau phiên chạy tự động
+            if (out.last_report && out.last_report.unread_by_admin && !out.task?.active) {
+              this.reportModal.open = true;
+            }
+
             if (out.task && out.task.active) {
               this.task = out.task;
               this.startPollingTask();
@@ -1608,6 +1834,15 @@
           } catch (e) {
             this.showToast(e.message, 'error');
           }
+        },
+        async acknowledgeAdminReport() {
+          this.reportModal.open = false;
+          if (this.data.last_report) {
+            this.data.last_report.unread_by_admin = false;
+          }
+          try {
+            await fetch('/api/report/ack', { method: 'POST' });
+          } catch (e) {}
         },
         startPollingTask() {
           if (this.pollTimer) clearInterval(this.pollTimer);
@@ -1748,14 +1983,41 @@
         },
         openDeleteDialog(groupSnap, specificVerId = null) {
           const versions = groupSnap.versions || [groupSnap];
-          const chosen = (specificVerId && versions.find(v => v.version_id === specificVerId)) || versions[0];
+          const totalSizeMb = versions.reduce((acc, v) => acc + Number(v.size_mb || 0), 0);
+          this.deleteModal.groupSnap = groupSnap;
           this.deleteModal.versions = versions;
-          this.deleteModal.selectedVersionId = chosen.version_id;
-          this.deleteModal.snap = chosen;
+          this.deleteModal.totalSizeMb = totalSizeMb;
+
+          if (!specificVerId && versions.length > 1) {
+            this.deleteModal.selectedVersionId = 'ALL';
+            this.deleteModal.snap = {
+              app_name: groupSnap.app_name,
+              version_id: 'ALL',
+              timestamp_str: `ALL (${versions.length})`,
+              on_ssd: Boolean(groupSnap.on_ssd),
+              on_cloud: Boolean(groupSnap.on_cloud)
+            };
+          } else {
+            const chosen = (specificVerId && versions.find(v => v.version_id === specificVerId)) || versions[0];
+            this.deleteModal.selectedVersionId = chosen.version_id;
+            this.deleteModal.snap = chosen;
+          }
+
           this.deletingBackup = false;
           this.deleteModal.open = true;
         },
         onDeleteVersionChange() {
+          if (this.deleteModal.selectedVersionId === 'ALL') {
+            const g = this.deleteModal.groupSnap;
+            this.deleteModal.snap = {
+              app_name: g.app_name,
+              version_id: 'ALL',
+              timestamp_str: `ALL (${this.deleteModal.versions.length})`,
+              on_ssd: Boolean(g.on_ssd),
+              on_cloud: Boolean(g.on_cloud)
+            };
+            return;
+          }
           const found = (this.deleteModal.versions || []).find(v => v.version_id === this.deleteModal.selectedVersionId);
           if (found) {
             this.deleteModal.snap = found;
@@ -1763,19 +2025,26 @@
         },
         async confirmDelete(target) {
           const snap = this.deleteModal.snap;
-          if (!snap || this.deletingBackup) return;
+          const verId = this.deleteModal.selectedVersionId || snap?.version_id;
+          if (!snap || !verId || this.deletingBackup) return;
           this.deletingBackup = true;
           this.task = {
             active: true,
             title: this.t('deletingProgress'),
-            detail: `${snap.app_name} (${snap.timestamp_str})`,
+            detail: verId === 'ALL'
+              ? `${snap.app_name} (ALL - ${this.deleteModal.versions.length} versions)`
+              : `${snap.app_name} (${snap.timestamp_str})`,
             progress: 50
           };
           try {
-            const res = await fetch(`/api/backup/${snap.app_name}/${snap.version_id}?target=${target}`, { method: 'DELETE' });
+            const res = await fetch(`/api/backup/${snap.app_name}/${verId}?target=${target}`, { method: 'DELETE' });
             await this.parseResponse(res);
             this.deleteModal.open = false;
-            this.showToast(this.lang === 'vi' ? 'Đã xóa bản sao lưu!' : 'Snapshot deleted!');
+            this.showToast(
+              verId === 'ALL'
+                ? (this.lang === 'vi' ? `Đã xóa toàn bộ bản sao lưu của ${snap.app_name}!` : `Deleted all snapshots of ${snap.app_name}!`)
+                : (this.lang === 'vi' ? 'Đã xóa bản sao lưu!' : 'Snapshot deleted!')
+            );
             await this.loadOverview(false);
           } catch (e) {
             this.showToast(e.message, 'error');
@@ -1872,5 +2141,6 @@
       }
     }
   </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"2c797f6e4ff94726be4651ae545fe2a6","r":1,"spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

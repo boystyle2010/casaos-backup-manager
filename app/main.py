@@ -25,6 +25,7 @@ BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", "/DATA/Backups"))
 APPS_BACKUP_DIR = BACKUP_ROOT / "apps"
 SETTINGS_FILE = BACKUP_ROOT / "settings.json"
 CLOUD_INDEX_CACHE = BACKUP_ROOT / "cloud_index_cache.json"
+LAST_REPORT_FILE = BACKUP_ROOT / "last_run_report.json"
 RCLONE_CONFIG_PATH = Path("/root/.config/rclone/rclone.conf")
 
 APPS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -49,6 +50,8 @@ DEFAULT_SETTINGS = {
     "schedule": "0 3 * * *",
     "schedule_enabled": False,
     "retention_count": 5,
+    "max_app_size_gb": 10.0,     # Giới hạn tối đa mỗi container (GB)
+    "min_free_ssd_gb": 5.0,      # Dung lượng SSD trống tối thiểu phải giữ lại (GB)
     "encryption_enabled": False,
     "encryption_password": "",
     "rclone_remote": "gdrive:CasaOS_Backups",
@@ -56,7 +59,6 @@ DEFAULT_SETTINGS = {
     "last_cloud_error": None
 }
 
-# Quản lý tiến trình và hỗ trợ Hủy (Cancel Task)
 TASK_STATE = {
     "active": False,
     "task_type": "",
@@ -69,8 +71,15 @@ TASK_STATE = {
 CANCEL_EVENT = threading.Event()
 ACTIVE_PROC = None
 PROC_LOCK = threading.Lock()
+CACHE_LOCK = threading.Lock()
+REPORT_LOCK = threading.Lock()
+_DOCKER_CLIENT = None
 
 class TaskCancelledError(Exception):
+    pass
+
+class AppSkippedOversizeError(Exception):
+    """Ngoại lệ riêng khi Container phình quá lớn hoặc làm đầy SSD"""
     pass
 
 def update_task(active: bool, task_type="", title="", detail="", progress=0, status="running"):
@@ -84,13 +93,68 @@ def update_task(active: bool, task_type="", title="", detail="", progress=0, sta
         "updated_at": time.time()
     })
 
-def run_cancellable_cmd(cmd: list, timeout: int = 900):
-    """Chạy lệnh subprocess cho phép bấm nút Hủy ngay lập tức từ giao diện Web"""
+def get_docker_client():
+    """Sử dụng kết nối Docker Client tái sử dụng để tránh rò rỉ socket file descriptors"""
+    global _DOCKER_CLIENT
+    try:
+        if _DOCKER_CLIENT is None:
+            _DOCKER_CLIENT = docker.DockerClient(base_url="unix://var/run/docker.sock", version="auto", timeout=30)
+        else:
+            _DOCKER_CLIENT.ping()
+        return _DOCKER_CLIENT
+    except Exception:
+        _DOCKER_CLIENT = docker.DockerClient(base_url="unix://var/run/docker.sock", version="auto", timeout=30)
+        return _DOCKER_CLIENT
+
+def load_last_report() -> dict:
+    with REPORT_LOCK:
+        if LAST_REPORT_FILE.exists():
+            try:
+                with open(LAST_REPORT_FILE, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        existing = get_merged_backups()
+        seen = set()
+        succeeded_init = []
+        latest_ts = ""
+        for b in existing:
+            aname = b.get("app_name")
+            if aname and aname not in seen:
+                seen.add(aname)
+                if not latest_ts:
+                    latest_ts = b.get("timestamp_str", "")
+                succeeded_init.append({
+                    "app_name": aname,
+                    "size_mb": b.get("size_mb", 0),
+                    "version_id": b.get("version_id", ""),
+                    "synced_cloud": bool(b.get("on_cloud"))
+                })
+        return {
+            "report_id": "init" if succeeded_init else "",
+            "timestamp": latest_ts,
+            "trigger_type": "Trạng thái khởi tạo hệ thống",
+            "unread_by_admin": False,
+            "has_warnings": False,
+            "succeeded": succeeded_init,
+            "skipped": []
+        }
+
+def save_last_report(report: dict):
+    with REPORT_LOCK:
+        with open(LAST_REPORT_FILE, "w") as f:
+            json.dump(report, f, indent=2)
+
+def run_cancellable_cmd(cmd: list, timeout: int = 900, extra_env: dict = None):
     global ACTIVE_PROC
     if CANCEL_EVENT.is_set():
         raise TaskCancelledError("Đã hủy tiến trình theo yêu cầu người dùng")
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
     with PROC_LOCK:
         ACTIVE_PROC = proc
 
@@ -128,9 +192,6 @@ def save_settings(settings: dict):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f, indent=2)
 
-def get_docker_client():
-    return docker.DockerClient(base_url="unix://var/run/docker.sock", version="auto")
-
 def sha256sum(filepath: Path) -> str:
     h = hashlib.sha256()
     with open(filepath, "rb") as f:
@@ -141,6 +202,9 @@ def sha256sum(filepath: Path) -> str:
     return h.hexdigest()
 
 _DIR_SIZE_CACHE = {}
+
+def invalidate_dir_cache():
+    _DIR_SIZE_CACHE.clear()
 
 def get_dir_size_mb(path: Path, ttl: int = 45) -> float:
     now = time.time()
@@ -162,9 +226,72 @@ def get_dir_size_mb(path: Path, ttl: int = 45) -> float:
     _DIR_SIZE_CACHE[key] = (now, val)
     return val
 
-def should_backup_mount(source: str) -> bool:
+EXCLUDED_BACKUP_DIRS = {".stversions", "__pycache__", ".cache", "index-v2", "index-v0.14.0.db"}
+
+def is_ignored_backup_file(filename: str) -> bool:
+    if "sync-conflict" in filename or ".corrupt" in filename:
+        return True
+    if filename.startswith((".syncthing.", "~syncthing~")):
+        return True
+    if filename.endswith((".old", ".db-wal", ".db-shm", ".log.1", ".log.fault")):
+        return True
+    return False
+
+def check_mount_size_within_limit(path_str: str, limit_bytes: int) -> tuple[bool, int]:
+    """Quét nhanh dung lượng thư mục (đã trừ các thư mục rác/index): Ngắt ngay nếu vượt limit_bytes"""
+    if not os.path.exists(path_str):
+        return True, 0
+    if os.path.isfile(path_str):
+        try:
+            sz = os.path.getsize(path_str)
+            return sz <= limit_bytes, sz
+        except OSError:
+            return True, 0
+
+    total = 0
+    backup_root_str = str(BACKUP_ROOT).rstrip("/")
+    for root, dirs, files in os.walk(path_str):
+        dirs[:] = [
+            d for d in dirs
+            if os.path.join(root, d).rstrip("/") != backup_root_str
+            and d not in EXCLUDED_BACKUP_DIRS
+            and not d.startswith("index-v")
+        ]
+        for f in files:
+            if is_ignored_backup_file(f):
+                continue
+            fp = os.path.join(root, f)
+            if not os.path.islink(fp):
+                try:
+                    total += os.path.getsize(fp)
+                    if total > limit_bytes:
+                        return False, total
+                except OSError:
+                    pass
+    return True, total
+
+def get_free_ssd_gb() -> float:
+    _, _, free = shutil.disk_usage("/DATA")
+    return round(free / (1024 ** 3), 2)
+
+def should_backup_mount(source: str, app_name: str = "") -> bool:
+    src_clean = source.rstrip("/")
+    backup_root_str = str(BACKUP_ROOT).rstrip("/")
+
+    if src_clean in ["", "/", "/DATA", "/DATA/Media", "/DATA/Downloads", "/DATA/AppData", backup_root_str] or src_clean.startswith(backup_root_str + "/"):
+        return False
+
+    # Chặn tuyệt đối việc container này (VD: Syncthing) sao lưu hoặc ghi đè thư mục AppData của container khác (VD: Home Assistant)
+    if app_name and src_clean.startswith("/DATA/AppData/"):
+        parts = src_clean.split("/")
+        if len(parts) >= 4:
+            folder_owner = parts[3].lower()
+            app_clean = app_name.lower()
+            if folder_owner != app_clean and app_clean not in folder_owner and folder_owner not in app_clean:
+                return False
+
     for ignored in IGNORED_MOUNT_SOURCES:
-        if source == ignored or source.startswith(ignored + "/"):
+        if src_clean == ignored or src_clean.startswith(ignored + "/"):
             return False
     return True
 
@@ -180,17 +307,19 @@ def get_rclone_remotes() -> list:
     return []
 
 def load_cloud_cache() -> dict:
-    if CLOUD_INDEX_CACHE.exists():
-        try:
-            with open(CLOUD_INDEX_CACHE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+    with CACHE_LOCK:
+        if CLOUD_INDEX_CACHE.exists():
+            try:
+                with open(CLOUD_INDEX_CACHE, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
 
 def save_cloud_cache(cache: dict):
-    with open(CLOUD_INDEX_CACHE, "w") as f:
-        json.dump(cache, f, indent=2)
+    with CACHE_LOCK:
+        with open(CLOUD_INDEX_CACHE, "w") as f:
+            json.dump(cache, f, indent=2)
 
 def refresh_cloud_cache():
     settings = load_settings()
@@ -199,7 +328,7 @@ def refresh_cloud_cache():
         return load_cloud_cache()
     try:
         cmd = ["rclone", "lsf", f"{remote}/apps", "-R", "--files-only", "--include", "manifest.json"]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
         if res.returncode != 0:
             return load_cloud_cache()
 
@@ -221,7 +350,7 @@ def refresh_cloud_cache():
                     else:
                         cat_res = subprocess.run(
                             ["rclone", "cat", f"{remote}/apps/{app_name}/{ver_id}/manifest.json"],
-                            capture_output=True, text=True, timeout=15
+                            capture_output=True, text=True, timeout=12
                         )
                         if cat_res.returncode == 0:
                             try:
@@ -261,6 +390,9 @@ def get_merged_backups():
             item["on_cloud"] = True
             merged[key] = item
 
+    for item in merged.values():
+        if not item.get("size_mb") or float(item.get("size_mb", 0)) <= 0:
+            item["size_mb"] = 0.01
     return sorted(merged.values(), key=lambda x: x.get("version_id", ""), reverse=True)
 
 def discover_containers(merged_backups=None):
@@ -280,7 +412,7 @@ def discover_containers(merged_backups=None):
             src = m.get("Source", "")
             dst = m.get("Destination", "")
             mtype = m.get("Type", "bind")
-            if should_backup_mount(src):
+            if should_backup_mount(src, name):
                 data_mounts.append({"type": mtype, "source": src, "destination": dst})
 
         app_snaps = [b for b in merged_backups if b.get("app_name") == name]
@@ -303,39 +435,94 @@ def discover_containers(merged_backups=None):
         })
     return result
 
+def _purge_cloud_dir_sync(remote_target_path: str):
+    """Xóa thư mục trên Cloud an toàn với timeout rộng và retry"""
+    for _ in range(2):
+        try:
+            res = subprocess.run(
+                ["rclone", "purge", remote_target_path, "--contimeout", "15s", "--timeout", "45s"],
+                capture_output=True, text=True, timeout=60
+            )
+            if res.returncode == 0 or "directory not found" in (res.stderr or "").lower():
+                break
+        except Exception:
+            pass
+        time.sleep(1)
+
 def apply_retention(app_name: str, keep_count: int):
     if keep_count <= 0:
         return
     settings = load_settings()
     remote = settings.get("rclone_remote", "").strip().rstrip("/")
 
+    # 1. Cắt tỉa trên SSD
     app_dir = APPS_BACKUP_DIR / app_name
     if app_dir.exists():
         versions = sorted([d for d in app_dir.iterdir() if d.is_dir()], reverse=True)
         for old_dir in versions[keep_count:]:
             shutil.rmtree(old_dir, ignore_errors=True)
 
+    # 2. Cắt tỉa trong Cloud Cache & trên Google Drive/Cloud
+    cache = load_cloud_cache()
+    app_cloud_keys = sorted(
+        [k for k, v in cache.items() if k.startswith(f"{app_name}/") or (isinstance(v, dict) and v.get("app_name") == app_name)],
+        key=lambda k: k.split("/")[-1],
+        reverse=True
+    )
+    to_remove_vers = set()
+    for old_key in app_cloud_keys[keep_count:]:
+        cache.pop(old_key, None)
+        parts = old_key.split("/")
+        if len(parts) >= 2:
+            to_remove_vers.add((parts[0], parts[1]))
+
     if remote and get_rclone_remotes():
         try:
             res = subprocess.run(
-                ["rclone", "lsf", f"{remote}/apps/{app_name}", "--dirs-only"],
-                capture_output=True, text=True, timeout=20
+                ["rclone", "lsf", f"{remote}/apps/{app_name}", "--dirs-only", "--contimeout", "15s", "--timeout", "30s"],
+                capture_output=True, text=True, timeout=35
             )
             if res.returncode == 0:
                 cloud_vers = sorted([v.strip().rstrip("/") for v in res.stdout.splitlines() if v.strip()], reverse=True)
-                cache = load_cloud_cache()
                 for old_ver in cloud_vers[keep_count:]:
-                    subprocess.run(
-                        ["rclone", "purge", f"{remote}/apps/{app_name}/{old_ver}"],
-                        capture_output=True, text=True, timeout=60
-                    )
                     cache.pop(f"{app_name}/{old_ver}", None)
-                save_cloud_cache(cache)
+                    to_remove_vers.add((app_name, old_ver))
         except Exception:
             pass
 
-# ================= PUSH & PULL CLOUD (CÓ HỖ TRỢ HỦY LỆNH) =================
-def sync_to_cloud(app_name: str = "ALL", update_progress: bool = True):
+    save_cloud_cache(cache)
+
+    if remote and to_remove_vers and get_rclone_remotes():
+        for a_name, v_id in sorted(to_remove_vers):
+            _purge_cloud_dir_sync(f"{remote}/apps/{a_name}/{v_id}")
+
+    invalidate_dir_cache()
+
+def enforce_all_retentions():
+    """Quét và ép toàn bộ ứng dụng trên SSD & Cloud tuân thủ đúng retention_count hiện tại"""
+    try:
+        settings = load_settings()
+        keep_count = int(settings.get("retention_count", 5))
+        if keep_count <= 0:
+            return
+        cache = load_cloud_cache()
+        all_apps = set()
+        if APPS_BACKUP_DIR.exists():
+            for d in APPS_BACKUP_DIR.iterdir():
+                if d.is_dir():
+                    all_apps.add(d.name)
+        for k, v in cache.items():
+            if "/" in k:
+                all_apps.add(k.split("/")[0])
+            if isinstance(v, dict) and v.get("app_name"):
+                all_apps.add(v["app_name"])
+        for app_name in sorted(all_apps):
+            apply_retention(app_name, keep_count)
+    except Exception as e:
+        print(f"[RETENTION CLEANUP ERROR] {e}")
+
+# ================= PUSH & PULL CLOUD =================
+def sync_to_cloud(app_name: str = "ALL", version_id: str = None, update_progress: bool = True):
     settings = load_settings()
     remote = settings.get("rclone_remote", "").strip().rstrip("/")
     if not remote:
@@ -347,39 +534,60 @@ def sync_to_cloud(app_name: str = "ALL", update_progress: bool = True):
         return False, msg
 
     try:
-        target_label = "Tất cả ứng dụng" if app_name == "ALL" else app_name
+        target_label = "Tất cả ứng dụng" if app_name == "ALL" else (f"{app_name} ({version_id})" if version_id else app_name)
         if update_progress:
             update_task(True, "cloud_sync", f"Đang đẩy lên Cloud ({target_label})...", f"Đồng bộ tới {remote}", 35, "running")
 
         if app_name == "ALL":
-            src_path = str(BACKUP_ROOT)
-            dst_path = remote
+            src_path = str(APPS_BACKUP_DIR)
+            dst_path = f"{remote}/apps"
+        elif version_id:
+            local_ver_dir = APPS_BACKUP_DIR / app_name / version_id
+            if not local_ver_dir.exists():
+                return False, f"Không tìm thấy phiên bản {version_id} trên SSD"
+            src_path = str(local_ver_dir)
+            dst_path = f"{remote}/apps/{app_name}/{version_id}"
         else:
             local_app_dir = APPS_BACKUP_DIR / app_name
             if not local_app_dir.exists():
-                msg = f"Ứng dụng [{app_name}] chưa có bản sao lưu nào trên SSD!"
+                msg = f"Ứng dụng [{app_name}] chưa có bản sao lưu nào trên ổ SSD!"
                 if update_progress:
                     update_task(False, "cloud_sync", "Không có dữ liệu", msg, 100, "error")
                 return False, msg
             src_path = str(local_app_dir)
             dst_path = f"{remote}/apps/{app_name}"
 
-        cmd = ["rclone", "copy", src_path, dst_path, "--transfers", "4", "--exclude", "cloud_index_cache.json"]
-        rc, out, err = run_cancellable_cmd(cmd, timeout=900)
+        cmd = [
+            "rclone", "copy", src_path, dst_path,
+            "--transfers", "4",
+            "--checkers", "8",
+            "--contimeout", "15s",
+            "--timeout", "60s",
+            "--exclude", "cloud_index_cache.json"
+        ]
+        rc, out, err = run_cancellable_cmd(cmd, timeout=600)
         if rc == 0:
             if update_progress:
                 update_task(True, "cloud_sync", "Đang cập nhật danh mục Cloud...", "Lưu trạng thái đồng bộ...", 85, "running")
             cache = load_cloud_cache()
-            scan_dirs = [APPS_BACKUP_DIR / app_name] if app_name != "ALL" else (list(APPS_BACKUP_DIR.iterdir()) if APPS_BACKUP_DIR.exists() else [])
-            for a_dir in scan_dirs:
-                if a_dir.exists() and a_dir.is_dir():
-                    for ver_dir in a_dir.iterdir():
-                        mf = ver_dir / "manifest.json"
-                        if mf.exists():
-                            try:
-                                cache[f"{a_dir.name}/{ver_dir.name}"] = json.loads(mf.read_text())
-                            except Exception:
-                                pass
+            if version_id and app_name != "ALL":
+                mf = APPS_BACKUP_DIR / app_name / version_id / "manifest.json"
+                if mf.exists():
+                    try:
+                        cache[f"{app_name}/{version_id}"] = json.loads(mf.read_text())
+                    except Exception:
+                        pass
+            else:
+                scan_dirs = [APPS_BACKUP_DIR / app_name] if app_name != "ALL" else (list(APPS_BACKUP_DIR.iterdir()) if APPS_BACKUP_DIR.exists() else [])
+                for a_dir in scan_dirs:
+                    if a_dir.exists() and a_dir.is_dir():
+                        for ver_dir in a_dir.iterdir():
+                            mf = ver_dir / "manifest.json"
+                            if mf.exists():
+                                try:
+                                    cache[f"{a_dir.name}/{ver_dir.name}"] = json.loads(mf.read_text())
+                                except Exception:
+                                    pass
             save_cloud_cache(cache)
 
             settings["last_cloud_sync"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -426,6 +634,7 @@ def pull_from_cloud_worker(app_name: str = "ALL"):
         if rc == 0:
             update_task(True, "cloud_pull", "Đang cập nhật danh mục...", "Quét các gói vừa tải về...", 85, "running")
             refresh_cloud_cache()
+            invalidate_dir_cache()
             update_task(False, "cloud_pull", "Tải từ Cloud hoàn tất!", f"Đã tải [{target_label}] về SSD thành công", 100, "completed")
         else:
             update_task(False, "cloud_pull", "Lỗi tải từ Cloud", err.strip() or "Không tìm thấy dữ liệu trên Cloud", 100, "error")
@@ -434,7 +643,7 @@ def pull_from_cloud_worker(app_name: str = "ALL"):
     except Exception as e:
         update_task(False, "cloud_pull", "Lỗi tải từ Cloud", str(e), 100, "error")
 
-# ================= BACKUP CORE =================
+# ================= BACKUP CORE (CÓ BẢO VỆ SSD & NÉN AN TOÀN KHI CONTAINER ĐANG CHẠY) =================
 def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
     if CANCEL_EVENT.is_set():
         raise TaskCancelledError("Đã hủy tiến trình sao lưu")
@@ -446,6 +655,41 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy container {app_name}")
 
     settings = load_settings()
+    max_app_gb = float(settings.get("max_app_size_gb", 10.0))
+    min_free_gb = float(settings.get("min_free_ssd_gb", 5.0))
+    limit_bytes = int(max_app_gb * (1024 ** 3))
+    min_free_bytes = int(min_free_gb * (1024 ** 3))
+
+    free_now_gb = get_free_ssd_gb()
+    if free_now_gb < min_free_gb:
+        raise AppSkippedOversizeError(
+            f"Ổ SSD chỉ còn trống {free_now_gb} GB (dưới mức bảo vệ tối thiểu {min_free_gb} GB)"
+        )
+
+    attrs = container.attrs
+    mounts = attrs.get("Mounts", [])
+
+    if manage_task_state:
+        update_task(True, "backup", f"Đang kiểm tra dung lượng {app_name}...", "Đo kích thước AppData & kiểm tra giới hạn SSD", 10, "running")
+
+    total_est_bytes = 0
+    for m in mounts:
+        src = m.get("Source", "")
+        if should_backup_mount(src, app_name) and os.path.exists(src):
+            remaining_quota = limit_bytes - total_est_bytes
+            within_limit, dir_sz = check_mount_size_within_limit(src, remaining_quota)
+            total_est_bytes += dir_sz
+            if not within_limit or total_est_bytes > limit_bytes:
+                est_gb = round(total_est_bytes / (1024 ** 3), 2)
+                raise AppSkippedOversizeError(
+                    f"Phình quá mức cho phép (nặng hơn {est_gb} GB / giới hạn {max_app_gb} GB)"
+                )
+            _, _, current_free_b = shutil.disk_usage("/DATA")
+            if (current_free_b - total_est_bytes) < min_free_bytes:
+                raise AppSkippedOversizeError(
+                    f"Dữ liệu quá lớn so với dung lượng SSD còn trống (giữ tối thiểu {min_free_gb} GB)"
+                )
+
     now = datetime.now()
     ver_id = now.strftime("%Y%m%d_%H%M%S")
     target_dir = APPS_BACKUP_DIR / app_name / ver_id
@@ -453,19 +697,17 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
 
     try:
         if manage_task_state:
-            update_task(True, "backup", f"Đang sao lưu {app_name}...", "Trích xuất cấu hình container_spec.json", 15, "running")
+            update_task(True, "backup", f"Đang sao lưu {app_name}...", "Trích xuất cấu hình container_spec.json", 20, "running")
 
-        attrs = container.attrs
         spec_file = target_dir / "container_spec.json"
         with open(spec_file, "w") as f:
             json.dump(attrs, f, indent=2)
 
-        mounts = attrs.get("Mounts", [])
         archive_path = target_dir / "appdata.tar.gz"
         backed_up_mounts = []
 
         if manage_task_state:
-            update_task(True, "backup", f"Đang nén dữ liệu {app_name}...", "Đang đóng gói các thư mục AppData", 40, "running")
+            update_task(True, "backup", f"Đang nén dữ liệu {app_name}...", "Đang đóng gói các thư mục AppData", 45, "running")
 
         if app_name == "homeassistant" and settings.get("ha_auto_clean", True):
             ha_cfg = Path("/DATA/AppData/homeassistant/config")
@@ -480,15 +722,70 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
                         if pyc.is_dir(): shutil.rmtree(pyc, ignore_errors=True)
                     except Exception: pass
 
+        tar_state = {"bytes_seen": 0, "files_count": 0}
+
+        def _tar_safe_filter(tarinfo):
+            if CANCEL_EVENT.is_set():
+                raise TaskCancelledError("Đã hủy tiến trình sao lưu")
+            tar_state["bytes_seen"] += getattr(tarinfo, "size", 0)
+            tar_state["files_count"] += 1
+
+            if tar_state["bytes_seen"] > limit_bytes:
+                raise AppSkippedOversizeError(
+                    f"Phát sinh file vượt ngưỡng {max_app_gb} GB khi đang nén (Đã tự động hủy & xóa file tạm)"
+                )
+            if tar_state["files_count"] % 150 == 0:
+                _, _, free_b = shutil.disk_usage("/DATA")
+                if free_b < min_free_bytes:
+                    raise AppSkippedOversizeError(
+                        f"Ổ SSD chạm ngưỡng đầy dưới {min_free_gb} GB khi đang nén (Đã ngắt khẩn cấp)"
+                    )
+            return tarinfo
+
+        def _safe_add_path(tar_obj, src_path: str, arc_path: str):
+            """Đóng gói tar an toàn: Bỏ qua các file log/temp/index-v2/rác xung đột"""
+            if os.path.isfile(src_path) or os.path.islink(src_path):
+                if not is_ignored_backup_file(os.path.basename(src_path)):
+                    try:
+                        tar_obj.add(src_path, arcname=arc_path, recursive=False, filter=_tar_safe_filter)
+                    except (FileNotFoundError, PermissionError):
+                        pass
+                return
+
+            for root, dirs, files in os.walk(src_path):
+                dirs[:] = [d for d in dirs if d not in EXCLUDED_BACKUP_DIRS and not d.startswith("index-v")]
+                files = [f for f in files if not is_ignored_backup_file(f)]
+                rel_root = os.path.relpath(root, src_path)
+                curr_arc = arc_path if rel_root == "." else os.path.join(arc_path, rel_root)
+                try:
+                    tar_obj.add(root, arcname=curr_arc, recursive=False, filter=_tar_safe_filter)
+                except (FileNotFoundError, PermissionError):
+                    continue
+
+                for d in dirs:
+                    full_d = os.path.join(root, d)
+                    if os.path.islink(full_d):
+                        try:
+                            tar_obj.add(full_d, arcname=os.path.join(curr_arc, d), recursive=False, filter=_tar_safe_filter)
+                        except (FileNotFoundError, PermissionError):
+                            pass
+
+                for f in files:
+                    full_f = os.path.join(root, f)
+                    try:
+                        tar_obj.add(full_f, arcname=os.path.join(curr_arc, f), recursive=False, filter=_tar_safe_filter)
+                    except (FileNotFoundError, PermissionError):
+                        pass
         with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(spec_file, arcname="container_spec.json")
             for idx, m in enumerate(mounts):
                 if CANCEL_EVENT.is_set():
                     raise TaskCancelledError("Đã hủy tiến trình sao lưu")
                 src = m.get("Source", "")
                 dst = m.get("Destination", "")
-                if should_backup_mount(src) and os.path.exists(src):
+                if should_backup_mount(src, app_name) and os.path.exists(src):
                     arcname = f"mount_{idx}"
-                    tar.add(src, arcname=arcname)
+                    _safe_add_path(tar, src, arcname)
                     backed_up_mounts.append({
                         "arcname": arcname,
                         "source": src,
@@ -507,16 +804,17 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
             cmd = [
                 "openssl", "enc", "-aes-256-cbc", "-salt", "-pbkdf2",
                 "-in", str(archive_path), "-out", str(enc_path),
-                "-pass", f"pass:{pwd}"
+                "-pass", "env:CBM_ENC_PASS"
             ]
-            rc, _, _ = run_cancellable_cmd(cmd, timeout=300)
+            rc, _, _ = run_cancellable_cmd(cmd, timeout=300, extra_env={"CBM_ENC_PASS": pwd})
             if rc == 0 and enc_path.exists():
                 archive_path.unlink()
                 final_file = enc_path
                 encrypted = True
 
         checksum = sha256sum(final_file)
-        size_mb = round(final_file.stat().st_size / (1024 * 1024), 2)
+        raw_mb = final_file.stat().st_size / (1024 * 1024)
+        size_mb = round(raw_mb, 2) if raw_mb >= 0.01 else (0.01 if raw_mb > 0 else 0.0)
 
         manifest = {
             "app_name": app_name,
@@ -527,7 +825,8 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
             "encrypted": encrypted,
             "sha256": checksum,
             "size_mb": size_mb,
-            "mounts_map": backed_up_mounts
+            "mounts_map": backed_up_mounts,
+            "synced_cloud": False
         }
         with open(target_dir / "manifest.json", "w") as f:
             json.dump(manifest, f, indent=2)
@@ -535,9 +834,10 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
         if settings.get("backup_mode") in ["cloud", "local_cloud"]:
             if manage_task_state:
                 update_task(True, "backup", f"Đang tải {app_name} lên Cloud...", f"Đồng bộ gói {size_mb} MB lên Cloud", 80, "running")
-            ok, msg = sync_to_cloud(app_name=app_name, update_progress=False)
+            ok, msg = sync_to_cloud(app_name=app_name, version_id=ver_id, update_progress=False)
             if CANCEL_EVENT.is_set():
                 raise TaskCancelledError("Đã hủy khi đang tải lên Cloud")
+            manifest["synced_cloud"] = bool(ok)
 
             if ok and settings.get("backup_mode") == "cloud":
                 shutil.rmtree(target_dir, ignore_errors=True)
@@ -545,47 +845,148 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
         if manage_task_state:
             update_task(True, "backup", f"Đang dọn bản cũ ({app_name})...", "Áp dụng chính sách Retention trên SSD & Cloud", 92, "running")
         apply_retention(app_name, int(settings.get("retention_count", 5)))
+        invalidate_dir_cache()
 
         if manage_task_state:
             update_task(False, "backup", f"Hoàn tất sao lưu {app_name}!", f"Phiên bản {ver_id} ({size_mb} MB)", 100, "completed")
 
         return manifest
+
+    except AppSkippedOversizeError as ose:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        invalidate_dir_cache()
+        if manage_task_state:
+            update_task(False, "backup", f"Đã bỏ qua {app_name}", str(ose), 100, "error")
+        raise
     except TaskCancelledError:
         shutil.rmtree(target_dir, ignore_errors=True)
+        invalidate_dir_cache()
         if manage_task_state:
             update_task(False, "backup", "Đã hủy sao lưu", f"Đã dọn dẹp file tạm của {app_name}", 100, "cancelled")
         raise
+    except OSError as oe:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        invalidate_dir_cache()
+        if oe.errno == 28:
+            msg = f"Ổ SSD bị đầy khi đang nén [{app_name}]. Đã xóa file tạm để giải phóng bộ nhớ!"
+            if manage_task_state:
+                update_task(False, "backup", "Tràn bộ nhớ SSD", msg, 100, "error")
+            raise AppSkippedOversizeError(msg)
+        raise
 
-def run_backup_task(app_name):
+def run_backup_task(app_name, is_scheduled: bool = False):
+    """Chạy sao lưu & Ghi lại Báo cáo chi tiết cho Admin kiểm tra khi đăng nhập"""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    report_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    succeeded_list = []
+    skipped_list = []
+
     try:
         if isinstance(app_name, list):
             target_names = [a for a in app_name if a]
-            total = len(target_names)
-            for idx, name in enumerate(target_names, start=1):
-                if CANCEL_EVENT.is_set():
-                    raise TaskCancelledError("Đã hủy sao lưu hàng loạt")
-                pct = int(((idx - 1) / max(total, 1)) * 85) + 5
-                update_task(True, "backup", f"Đang sao lưu ({idx}/{total}): {name}", "Đóng gói cấu hình & dữ liệu...", pct, "running")
-                backup_single_app(name, manage_task_state=False)
-            update_task(False, "backup", "Đã sao lưu các ứng dụng đã chọn!", f"Hoàn tất {total}/{total} ứng dụng", 100, "completed")
+            trigger_label = "Sao lưu thủ công (Nhóm mục đã chọn)"
         elif app_name in ("ALL", "AUTO"):
             containers = discover_containers()
             if app_name == "AUTO":
+                trigger_label = "Sao lưu tự động theo lịch trình (Auto Cron)"
                 st = load_settings()
                 excluded = set(st.get("excluded_auto_apps", []))
+                for ex_name in sorted(excluded):
+                    if any(c["name"] == ex_name for c in containers):
+                        skipped_list.append({
+                            "app_name": ex_name,
+                            "reason": "Đã tắt trong danh sách sao lưu tự động (Excluded)",
+                            "type": "excluded"
+                        })
                 if st.get("ha_schedule_enabled"):
                     excluded.add("homeassistant")
                 containers = [c for c in containers if c["name"] not in excluded]
-            total = len(containers)
-            for idx, c in enumerate(containers, start=1):
+            else:
+                trigger_label = "Sao lưu tất cả ứng dụng (Backup All)"
+            target_names = [c["name"] for c in containers]
+        else:
+            trigger_label = f"Sao lưu tự động ({app_name})" if is_scheduled else f"Sao lưu thủ công ({app_name})"
+            try:
+                mf = backup_single_app(app_name, manage_task_state=True)
+                succeeded_list.append({
+                    "app_name": app_name,
+                    "size_mb": mf.get("size_mb", 0),
+                    "version_id": mf.get("version_id", ""),
+                    "synced_cloud": mf.get("synced_cloud", False)
+                })
+                save_last_report({
+                    "report_id": report_id,
+                    "timestamp": now_str,
+                    "trigger_type": trigger_label,
+                    "unread_by_admin": is_scheduled,
+                    "has_warnings": False,
+                    "succeeded": succeeded_list,
+                    "skipped": []
+                })
+            except AppSkippedOversizeError as ose:
+                skipped_list.append({"app_name": app_name, "reason": str(ose), "type": "oversize"})
+                save_last_report({
+                    "report_id": report_id,
+                    "timestamp": now_str,
+                    "trigger_type": trigger_label,
+                    "unread_by_admin": True,
+                    "has_warnings": True,
+                    "succeeded": [],
+                    "skipped": skipped_list
+                })
+            return
+
+        total = len(target_names)
+        for idx, name in enumerate(target_names, start=1):
+            if CANCEL_EVENT.is_set():
+                raise TaskCancelledError("Đã hủy sao lưu hàng loạt")
+            pct = int(((idx - 1) / max(total, 1)) * 85) + 5
+            update_task(True, "backup", f"Đang sao lưu ({idx}/{total}): {name}", "Kiểm tra dung lượng & đóng gói...", pct, "running")
+            try:
+                mf = backup_single_app(name, manage_task_state=False)
+                succeeded_list.append({
+                    "app_name": name,
+                    "size_mb": mf.get("size_mb", 0),
+                    "version_id": mf.get("version_id", ""),
+                    "synced_cloud": mf.get("synced_cloud", False)
+                })
+            except AppSkippedOversizeError as ose:
+                print(f"[SKIP OVERSIZE] {name}: {ose}")
+                skipped_list.append({
+                    "app_name": name,
+                    "reason": str(ose),
+                    "type": "oversize"
+                })
+                continue
+            except Exception as ex:
                 if CANCEL_EVENT.is_set():
                     raise TaskCancelledError("Đã hủy sao lưu hàng loạt")
-                pct = int(((idx - 1) / max(total, 1)) * 85) + 5
-                update_task(True, "backup", f"Đang sao lưu ({idx}/{total}): {c['name']}", "Đóng gói cấu hình & dữ liệu...", pct, "running")
-                backup_single_app(c["name"], manage_task_state=False)
-            update_task(False, "backup", "Đã sao lưu toàn bộ ứng dụng!", f"Hoàn tất {total}/{total} ứng dụng", 100, "completed")
+                print(f"[ERROR APP] {name}: {ex}")
+                skipped_list.append({
+                    "app_name": name,
+                    "reason": f"Lỗi thực thi: {str(ex)}",
+                    "type": "error"
+                })
+                continue
+
+        warn_skips = [s for s in skipped_list if s.get("type") in ("oversize", "error")]
+        if warn_skips:
+            short_names = ", ".join([s["app_name"] for s in warn_skips])
+            detail_msg = f"Đã lưu {len(succeeded_list)}/{total} app. Bỏ qua: {short_names}"
         else:
-            backup_single_app(app_name, manage_task_state=True)
+            detail_msg = f"Hoàn tất {len(succeeded_list)}/{total} ứng dụng"
+
+        save_last_report({
+            "report_id": report_id,
+            "timestamp": now_str,
+            "trigger_type": trigger_label,
+            "unread_by_admin": True,
+            "has_warnings": len(warn_skips) > 0,
+            "succeeded": succeeded_list,
+            "skipped": skipped_list
+        })
+
+        update_task(False, "backup", "Đã hoàn tất phiên sao lưu!", detail_msg, 100, "completed")
     except TaskCancelledError as ce:
         update_task(False, "backup", "Đã hủy sao lưu", str(ce), 100, "cancelled")
     except Exception as e:
@@ -684,9 +1085,9 @@ def restore_single_app(app_name: str, version_id: str, source: str = "ssd", recr
             cmd = [
                 "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2",
                 "-in", str(archive_file), "-out", str(dec_path),
-                "-pass", f"pass:{pwd}"
+                "-pass", "env:CBM_ENC_PASS"
             ]
-            rc, _, _ = run_cancellable_cmd(cmd, timeout=300)
+            rc, _, _ = run_cancellable_cmd(cmd, timeout=300, extra_env={"CBM_ENC_PASS": pwd})
             if rc != 0:
                 raise HTTPException(status_code=400, detail="Giải mã thất bại: Sai mật khẩu!")
             tar_to_extract = dec_path
@@ -710,6 +1111,8 @@ def restore_single_app(app_name: str, version_id: str, source: str = "ssd", recr
                 tar.extractall(path=temp_extract)
 
             for m_info in manifest.get("mounts_map", []):
+                if not should_backup_mount(m_info.get("source", ""), app_name):
+                    continue
                 arc_path = temp_extract / m_info["arcname"]
                 dest_src = Path(m_info["source"])
                 if arc_path.exists():
@@ -725,6 +1128,7 @@ def restore_single_app(app_name: str, version_id: str, source: str = "ssd", recr
             if manifest.get("encrypted") and tar_to_extract.exists():
                 tar_to_extract.unlink()
 
+        invalidate_dir_cache()
         src_label = "Cloud" if source == "cloud" else "SSD"
         if existing_container and not recreate_container:
             existing_container.start()
@@ -754,12 +1158,16 @@ scheduler = BackgroundScheduler()
 scheduler.start()
 
 def scheduled_backup_all():
+    if TASK_STATE.get("active"):
+        return
     CANCEL_EVENT.clear()
-    run_backup_task("AUTO")
+    run_backup_task("AUTO", is_scheduled=True)
 
 def scheduled_backup_ha():
+    if TASK_STATE.get("active"):
+        return
     CANCEL_EVENT.clear()
-    run_backup_task("homeassistant")
+    run_backup_task("homeassistant", is_scheduled=True)
 
 def reload_scheduler():
     scheduler.remove_all_jobs()
@@ -786,6 +1194,7 @@ def reload_scheduler():
             print(f"Lỗi cấu hình Cron HA: {e}")
 
 reload_scheduler()
+threading.Thread(target=enforce_all_retentions, daemon=True).start()
 
 # ================= API ENDPOINTS =================
 @app.get("/", response_class=HTMLResponse)
@@ -798,7 +1207,6 @@ def api_task_status():
 
 @app.post("/api/task/cancel")
 def api_cancel_task():
-    """Hủy ngay lập tức tiến trình đang chạy"""
     CANCEL_EVENT.set()
     with PROC_LOCK:
         if ACTIVE_PROC and ACTIVE_PROC.poll() is None:
@@ -809,9 +1217,16 @@ def api_cancel_task():
     update_task(False, TASK_STATE.get("task_type", ""), "Đã hủy tiến trình!", "Người dùng đã dừng tác vụ", 100, "cancelled")
     return {"status": "cancelled"}
 
+@app.post("/api/report/ack")
+def api_ack_report():
+    """Đánh dấu Admin đã xem báo cáo phiên chạy gần nhất"""
+    rep = load_last_report()
+    rep["unread_by_admin"] = False
+    save_last_report(rep)
+    return {"status": "acknowledged"}
+
 @app.get("/api/cloud/apps")
 def api_get_cloud_apps():
-    """Quét trực tiếp trên Cloud xem có những ứng dụng nào thực sự đang lưu trên Cloud"""
     settings = load_settings()
     remote = settings.get("rclone_remote", "").strip().rstrip("/")
     if not remote or not get_rclone_remotes():
@@ -826,14 +1241,12 @@ def api_get_cloud_apps():
             return {"apps": apps}
     except Exception:
         pass
-    # Fallback từ cache nếu mạng chậm
     cache = load_cloud_cache()
     apps = sorted(list({v.get("app_name") for v in cache.values() if isinstance(v, dict) and v.get("app_name")}))
     return {"apps": apps}
 
 @app.get("/api/recovery-key")
 def api_export_recovery_key():
-    """Tạo Khóa Khôi Phục 1-Chạm (Chứa rclone.conf + settings.json mã hóa Base64) để lưu vào Ghi chú iPhone"""
     rclone_txt = RCLONE_CONFIG_PATH.read_text() if RCLONE_CONFIG_PATH.exists() else ""
     payload = {
         "rclone_conf": rclone_txt,
@@ -844,7 +1257,6 @@ def api_export_recovery_key():
 
 @app.post("/api/recovery-key")
 async def api_import_recovery_key(request: Request):
-    """Khôi phục toàn bộ kết nối Google Drive & Cài đặt chỉ bằng 1 cú dán chuỗi CBMKEY"""
     body = await request.json()
     raw_key = body.get("recovery_key", "").strip()
     if raw_key.startswith("CBMKEY:"):
@@ -868,12 +1280,12 @@ async def api_import_recovery_key(request: Request):
 def api_overview(refresh_cloud: bool = False):
     if refresh_cloud:
         refresh_cloud_cache()
+        invalidate_dir_cache()
     total, used, free = shutil.disk_usage("/DATA")
     merged_backups = get_merged_backups()
     containers = discover_containers(merged_backups)
     settings = load_settings()
 
-    # Phân tách rõ: Danh sách app đang có bản lưu trên SSD vs Danh sách app đang có bản lưu trên Cloud
     ssd_apps = sorted(list({b["app_name"] for b in merged_backups if b.get("on_ssd")}))
     cloud_apps = sorted(list({b["app_name"] for b in merged_backups if b.get("on_cloud")}))
     all_app_names = sorted(list({c["name"] for c in containers} | {b["app_name"] for b in merged_backups}))
@@ -900,6 +1312,7 @@ def api_overview(refresh_cloud: bool = False):
         "cloud_apps": cloud_apps,
         "backups": merged_backups,
         "settings": settings,
+        "last_report": load_last_report(),
         "rclone": (lambda r: {
             "configured": len(r) > 0,
             "remotes": r,
@@ -943,24 +1356,56 @@ class RestoreRequest(BaseModel):
 def api_restore(req: RestoreRequest):
     return restore_single_app(req.app_name, req.version_id, req.source, req.recreate_container)
 
+def _background_cloud_purge(remote_target_path: str):
+    try:
+        subprocess.run(
+            ["rclone", "purge", remote_target_path, "--contimeout", "10s", "--timeout", "30s"],
+            capture_output=True, text=True, timeout=60
+        )
+    except Exception:
+        pass
+
 @app.delete("/api/backup/{app_name}/{version_id}")
 def api_delete_backup(app_name: str, version_id: str, target: str = "both"):
-    local_dir = APPS_BACKUP_DIR / app_name / version_id
+    app_dir = APPS_BACKUP_DIR / app_name
+    settings = load_settings()
+    remote = settings.get("rclone_remote", "").strip().rstrip("/")
+
+    if version_id == "ALL":
+        if target in ["ssd", "both"] and app_dir.exists():
+            shutil.rmtree(app_dir, ignore_errors=True)
+
+        if target in ["cloud", "both"]:
+            cache = load_cloud_cache()
+            prefix = f"{app_name}/"
+            clean_cache = {k: v for k, v in cache.items() if not k.startswith(prefix)}
+            save_cloud_cache(clean_cache)
+
+            if remote and get_rclone_remotes():
+                threading.Thread(
+                    target=_background_cloud_purge,
+                    args=(f"{remote}/apps/{app_name}",),
+                    daemon=True
+                ).start()
+
+        invalidate_dir_cache()
+        return {"status": "deleted_all", "target": target}
+
+    local_dir = app_dir / version_id
     if target in ["ssd", "both"] and local_dir.exists():
         shutil.rmtree(local_dir, ignore_errors=True)
+        if app_dir.exists() and not any(app_dir.iterdir()):
+            shutil.rmtree(app_dir, ignore_errors=True)
 
     if target in ["cloud", "both"]:
-        settings = load_settings()
-        remote = settings.get("rclone_remote", "").strip().rstrip("/")
-        if remote and get_rclone_remotes():
-            subprocess.run(
-                ["rclone", "purge", f"{remote}/apps/{app_name}/{version_id}"],
-                capture_output=True, text=True, timeout=60
-            )
         cache = load_cloud_cache()
         cache.pop(f"{app_name}/{version_id}", None)
         save_cloud_cache(cache)
 
+        if remote and get_rclone_remotes():
+            _purge_cloud_dir_sync(f"{remote}/apps/{app_name}/{version_id}")
+
+    invalidate_dir_cache()
     return {"status": "deleted", "target": target}
 
 @app.post("/api/settings")
@@ -970,6 +1415,7 @@ async def api_save_settings(request: Request):
     settings.update(body)
     save_settings(settings)
     reload_scheduler()
+    threading.Thread(target=enforce_all_retentions, daemon=True).start()
     return {"status": "saved", "settings": settings}
 
 @app.post("/api/rclone/config")
