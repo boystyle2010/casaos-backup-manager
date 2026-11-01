@@ -125,7 +125,7 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
           </svg>
-          <span class="text-xs sm:text-sm font-bold truncate" x-text="task.title"></span>
+          <span class="text-xs sm:text-sm font-bold truncate" x-text="translateServerText(task.title)"></span>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
           <button @click="cancelRunningTask()"
@@ -138,7 +138,7 @@
           </button>
         </div>
       </div>
-      <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" x-text="task.detail"></p>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" x-text="translateServerText(task.detail)"></p>
       <div class="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
         <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 rounded-full"
              :style="`width: ${Math.max(task.progress || 10, 8)}%`"></div>
@@ -176,7 +176,7 @@
           <div>
             <h3 class="text-base font-extrabold leading-tight" x-text="t('adminReportTitle')"></h3>
             <p class="text-[11px] text-slate-400 tabular-nums mt-0.5"
-               x-text="(data.last_report?.timestamp || '') + (data.last_report?.trigger_type ? ' • ' + data.last_report.trigger_type : '')"></p>
+               x-text="(data.last_report?.timestamp || '') + (data.last_report?.trigger_type ? ' • ' + translateServerText(data.last_report.trigger_type) : '')"></p>
           </div>
         </div>
         <button @click="acknowledgeAdminReport()" class="p-1 text-slate-400 hover:text-slate-200">
@@ -205,7 +205,7 @@
                           :class="item.type === 'excluded' ? 'bg-slate-500/20 text-slate-400' : 'bg-rose-500/20 text-rose-400'"
                           x-text="item.type === 'excluded' ? t('tagExcluded') : t('tagSkipped')"></span>
                   </div>
-                  <p class="text-[11px] leading-snug opacity-90" x-text="item.reason"></p>
+                  <p class="text-[11px] leading-snug opacity-90" x-text="translateServerText(item.reason)"></p>
                 </div>
               </template>
             </div>
@@ -232,7 +232,12 @@
                 <div class="flex items-center gap-1.5 shrink-0 tabular-nums">
                   <span class="text-[11px] font-bold text-blue-600 dark:text-blue-400" x-text="formatSize(okItem.size_mb)"></span>
                   <template x-if="okItem.synced_cloud">
-                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 border border-purple-500/25">Cloud</span>
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-500 border border-purple-500/25">
+                      <svg class="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/>
+                      </svg>
+                      <span>Cloud</span>
+                    </span>
                   </template>
                 </div>
               </div>
@@ -323,7 +328,14 @@
     <div @click.away="restoreModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold" x-text="t('restoreModalTitle')"></h3>
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-bold" x-text="t('restoreModalTitle')"></h3>
+        </div>
         <button @click="restoreModal.open = false" class="p-1 text-slate-400 hover:text-slate-200">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -342,7 +354,7 @@
           <select x-model="restoreModal.selectedVersionId" @change="onRestoreVersionChange()"
                   class="w-full h-10 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 text-xs font-semibold tabular-nums">
             <template x-for="(v, idx) in restoreModal.versions" :key="v.version_id">
-              <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? ' (Latest)' : '')"></option>
+              <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? (lang === 'vi' ? ' (Mới nhất)' : ' (Latest)') : '')"></option>
             </template>
           </select>
         </div>
@@ -420,9 +432,16 @@
        class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
     <div @click.away="if(!deletingBackup) deleteModal.open = false"
          class="bg-white dark:bg-darkcard border border-slate-200 dark:border-darkborder rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between">
-        <h3 class="text-base font-bold text-rose-500" x-text="t('deleteModalTitle')"></h3>
-        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[150px]" x-text="deleteModal.snap?.app_name"></span>
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+            </svg>
+          </div>
+          <h3 class="text-base font-bold text-rose-500 truncate" x-text="t('deleteModalTitle')"></h3>
+        </div>
+        <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[140px]" x-text="deleteModal.snap?.app_name"></span>
       </div>
 
       <div class="space-y-1.5">
@@ -431,17 +450,20 @@
                 class="w-full h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5 text-xs font-semibold tabular-nums"
                 :class="deleteModal.selectedVersionId === 'ALL' ? 'text-rose-500 border-rose-500/50 bg-rose-500/5' : ''">
           <template x-if="(deleteModal.versions?.length || 0) > 1">
-            <option value="ALL" x-text="'🔥 ' + t('deleteAllVersionsOption') + ' (' + deleteModal.versions.length + ' ' + t('versionsCountLabel') + ' • ' + formatSize(deleteModal.totalSizeMb) + ')'"></option>
+            <option value="ALL" x-text="'\u26A0\uFE0E ' + t('deleteAllVersionsOption') + ' (' + deleteModal.versions.length + ' ' + t('versionsCountLabel') + ' • ' + formatSize(deleteModal.totalSizeMb) + ')'"></option>
           </template>
           <template x-for="(v, idx) in deleteModal.versions" :key="v.version_id">
-            <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? ' (Latest)' : '')"></option>
+            <option :value="v.version_id" x-text="v.timestamp_str + ' • ' + formatSize(v.size_mb) + (idx === 0 ? (lang === 'vi' ? ' (Mới nhất)' : ' (Latest)') : '')"></option>
           </template>
         </select>
       </div>
 
       <div x-show="deleteModal.selectedVersionId === 'ALL' && !deletingBackup"
-           class="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-500 dark:text-rose-400 font-semibold leading-snug"
-           x-text="t('deleteAllWarning')">
+           class="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-[11px] text-rose-500 dark:text-rose-400 font-semibold leading-snug flex items-start gap-2">
+        <svg class="w-4 h-4 shrink-0 mt-0.5 text-rose-500" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+        </svg>
+        <span x-text="t('deleteAllWarning')"></span>
       </div>
 
       <div x-show="deletingBackup" class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center gap-2.5 text-xs font-semibold text-rose-500">
@@ -455,18 +477,27 @@
       <div class="space-y-2" x-show="!deletingBackup">
         <button x-show="deleteModal.snap?.on_ssd && deleteModal.snap?.on_cloud"
                 @click="confirmDelete('both')"
-                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-sm"
-                x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllBoth') : t('deleteBoth')">
+                class="w-full h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-sm">
+          <span class="inline-flex items-center justify-center gap-1.5">
+            <svg x-show="deleteModal.selectedVersionId === 'ALL'" class="w-4 h-4 shrink-0 text-current" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+            <span x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllBoth') : t('deleteBoth')"></span>
+          </span>
         </button>
         <button x-show="deleteModal.snap?.on_ssd"
                 @click="confirmDelete('ssd')"
-                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
-                x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllSsdOnly') : t('deleteSsdOnly')">
+                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition">
+          <span class="inline-flex items-center justify-center gap-1.5">
+            <svg x-show="deleteModal.selectedVersionId === 'ALL'" class="w-4 h-4 shrink-0 text-current" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+            <span x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllSsdOnly') : t('deleteSsdOnly')"></span>
+          </span>
         </button>
         <button x-show="deleteModal.snap?.on_cloud"
                 @click="confirmDelete('cloud')"
-                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition"
-                x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllCloudOnly') : t('deleteCloudOnly')">
+                class="w-full h-10 rounded-xl border border-slate-200 dark:border-darkborder hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition">
+          <span class="inline-flex items-center justify-center gap-1.5">
+            <svg x-show="deleteModal.selectedVersionId === 'ALL'" class="w-4 h-4 shrink-0 text-current" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+            <span x-text="deleteModal.selectedVersionId === 'ALL' ? t('deleteAllCloudOnly') : t('deleteCloudOnly')"></span>
+          </span>
         </button>
         <button @click="deleteModal.open = false"
                 class="w-full h-10 rounded-xl text-xs font-semibold text-slate-400"
@@ -493,11 +524,17 @@
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
-            <h1 class="text-base font-extrabold tracking-tight truncate">CasaOS Backup</h1>
+            <h1 class="text-base font-extrabold tracking-tight truncate">Backup Manager</h1>
             <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 shrink-0">PRO</span>
           </div>
           <p class="text-[11px] truncate flex items-center gap-1"
              :class="data.last_report?.has_warnings ? 'text-amber-500 font-semibold' : 'text-slate-500 dark:text-slate-400 group-hover:text-blue-400'">
+            <svg x-show="data.last_report?.report_id && data.last_report?.has_warnings" class="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <svg x-show="data.last_report?.report_id && !data.last_report?.has_warnings" class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
             <span class="truncate" x-text="headerReportSummary()"></span>
           </p>
         </div>
@@ -660,7 +697,7 @@
           <button type="button" @click="reportModal.open = true"
                   class="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
             <span x-text="t('viewLastReportLink')"></span>
-            <span>→</span>
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
           </button>
         </div>
       </div>
@@ -671,9 +708,7 @@
       <button @click="activeTab = 'apps'"
               class="py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5"
               :class="activeTab === 'apps' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
-        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
-        </svg>
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
         <span x-text="t('tabApps')"></span>
         <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 tabular-nums" x-text="data.containers.length"></span>
       </button>
@@ -681,9 +716,7 @@
       <button @click="activeTab = 'restore'"
               class="py-2.5 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-1.5"
               :class="activeTab === 'restore' ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-600 dark:text-slate-400'">
-        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
-        </svg>
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
         <span x-text="t('tabRestore')"></span>
         <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 tabular-nums" x-text="groupedBackups.length"></span>
       </button>
@@ -866,7 +899,7 @@
                     <span class="truncate" x-text="m.source"></span>
                   </div>
                   <div class="flex items-center gap-1.5 text-slate-400 pl-5 truncate">
-                    <span>↳</span>
+                    <svg class="w-3.5 h-3.5 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.49 12l3.75 3.75m0 0l-3.75 3.75m3.75-3.75H3.74V4.5"/></svg>
                     <span class="truncate" x-text="m.destination"></span>
                   </div>
                 </div>
@@ -882,7 +915,7 @@
       <div class="bg-white dark:bg-darkcard border border-slate-200/90 dark:border-darkborder rounded-2xl p-3 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div class="flex items-center justify-between sm:justify-start gap-2 flex-1">
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 pl-1 shrink-0" x-text="t('restoreTitle')"></h2>
-          <select x-model="filterApp" class="h-9 flex-1 sm:flex-initial text-xs font-semibold bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-3">
+          <select x-model="filterApp" class="h-8 w-auto max-w-[180px] truncate text-xs font-semibold bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-darkborder rounded-xl px-2.5">
             <option value="ALL" x-text="t('allApps') + ' (' + data.backups.length + ')'"></option>
             <template x-for="name in data.app_names" :key="name">
               <option :value="name" x-text="name"></option>
@@ -1259,7 +1292,7 @@
           </div>
 
           <div class="text-xs text-slate-400 flex items-center justify-between pt-1">
-            <span><span x-text="t('lastSync')"></span>: <b class="text-slate-600 dark:text-slate-300 tabular-nums" x-text="data.settings.last_cloud_sync"></b></span>
+            <span><span x-text="t('lastSync')"></span>: <b class="text-slate-600 dark:text-slate-300 tabular-nums" x-text="translateServerText(data.settings.last_cloud_sync)"></b></span>
           </div>
         </div>
       </div>
@@ -1604,6 +1637,90 @@
         t(key) {
           return (I18N[this.lang] && I18N[this.lang][key]) || key;
         },
+        translateServerText(txt) {
+          if (!txt || typeof txt !== 'string' || this.lang === 'vi') return txt || '';
+          let s = txt.trim();
+          const rules = [
+            [/^chưa đồng bộ$/i, 'Never synced'],
+            [/^chưa có$/i, 'No backup'],
+            [/^chưa sao lưu$/i, 'No backup'],
+            [/tổng hợp trạng thái hiện tại/i, 'Current System Status'],
+            [/sao lưu tự động theo lịch( trình)?\s*\(auto cron\)/i, 'Scheduled Auto-Backup (Auto Cron)'],
+            [/sao lưu tự động theo lịch( trình)?/i, 'Scheduled Auto-Backup'],
+            [/sao lưu mục đã chọn\s*\(batch\)/i, 'Batch Backup (Selected Apps)'],
+            [/sao lưu tất cả ứng dụng\s*\(backup all\)/i, 'Full Backup (Backup All)'],
+            [/^sao lưu thủ công\s*\((.+)\)$/i, 'Manual Backup ($1)'],
+            [/^sao lưu tự động\s*\((.+)\)$/i, 'Scheduled Backup ($1)'],
+            [/đang tắt trong danh sách sao lưu tự động.*/i, 'Excluded from scheduled auto-backup'],
+            [/^đã hoàn tất phiên sao lưu!?$/i, 'Backup session completed!'],
+            [/^đã hủy tiến trình!?$/i, 'Task cancelled!'],
+            [/^người dùng đã dừng tác vụ$/i, 'Stopped by user'],
+            [/^đã hủy sao lưu$/i, 'Backup cancelled'],
+            [/^đã hủy khôi phục$/i, 'Restore cancelled'],
+            [/^khôi phục hoàn tất!?$/i, 'Restore completed!'],
+            [/^lỗi khôi phục$/i, 'Restore failed'],
+            [/^đẩy lên cloud hoàn tất!?$/i, 'Cloud push completed!'],
+            [/^tải từ cloud hoàn tất!?$/i, 'Cloud pull completed!'],
+            [/^lỗi đồng bộ cloud$/i, 'Cloud sync failed'],
+            [/^lỗi tải từ cloud$/i, 'Cloud pull failed'],
+            [/^đang cập nhật danh mục cloud\.\.\.$/i, 'Updating Cloud catalog...'],
+            [/^lưu trạng thái đồng bộ\.\.\.$/i, 'Saving sync state...'],
+            [/^đang cập nhật danh mục\.\.\.$/i, 'Updating catalog...'],
+            [/^quét các gói vừa tải về\.\.\.$/i, 'Scanning downloaded archives...'],
+            [/^kiểm tra dung lượng & đóng gói\.\.\.$/i, 'Checking size & archiving...'],
+            [/^đo kích thước appdata & kiểm tra giới hạn ssd$/i, 'Measuring AppData & checking SSD guard'],
+            [/^trích xuất cấu hình container_spec\.json$/i, 'Exporting container_spec.json'],
+            [/^đang đóng gói các thư mục appdata$/i, 'Archiving AppData directories'],
+            [/^mã hóa chuẩn aes-256-cbc$/i, 'Encrypting with AES-256-CBC'],
+            [/^áp dụng chính sách retention trên ssd & cloud$/i, 'Applying retention policy on SSD & Cloud'],
+            [/^xác thực mã băm sha-256$/i, 'Verifying SHA-256 checksum'],
+            [/^giải mã aes-256-cbc$/i, 'Decrypting AES-256-CBC'],
+            [/^tạm dừng container và khôi phục appdata$/i, 'Stopping container & restoring AppData'],
+            [/^đang chuẩn bị\.\.\.$/i, 'Preparing...'],
+            [/^chuẩn bị đẩy dữ liệu\.\.\.$/i, 'Preparing upload...'],
+            [/^đang kết nối\.\.\.$/i, 'Connecting...'],
+            [/^hệ thống đang chạy một tiến trình khác!?$/i, 'Another task is already running!'],
+            [/^hệ thống đang bận!?$/i, 'System is busy with another task!'],
+            [/^khởi tạo sao lưu\s*\((.+)\)\.\.\.$/i, 'Initializing backup ($1)...'],
+            [/^đang kiểm tra dung lượng\s+(.+)\.\.\.$/i, 'Checking size of $1...'],
+            [/^đang sao lưu\s*\((\d+\/\d+)\):\s*(.+)$/i, 'Backing up ($1): $2'],
+            [/^đang sao lưu\s+(.+)\.\.\.$/i, 'Backing up $1...'],
+            [/^đang nén dữ liệu\s+(.+)\.\.\.$/i, 'Compressing $1...'],
+            [/^đang mã hóa\s+(.+)\.\.\.$/i, 'Encrypting $1...'],
+            [/^đang tải\s+(.+)\s+lên cloud\.\.\.$/i, 'Uploading $1 to Cloud...'],
+            [/^đồng bộ gói\s+(.+)\s+lên cloud$/i, 'Syncing $1 archive to Cloud'],
+            [/^đang dọn bản cũ\s*\((.+)\)\.\.\.$/i, 'Pruning old versions ($1)...'],
+            [/^hoàn tất sao lưu\s+(.+)!$/i, 'Backup completed for $1!'],
+            [/^phiên bản\s+(.+)\s+\((.+)\)$/i, 'Version $1 ($2)'],
+            [/^hoàn tất\s+(\d+\/\d+)\s+ứng dụng$/i, 'Completed $1 applications'],
+            [/^đã lưu\s+(\d+\/\d+)\s+app\.\s*bỏ qua:\s*(.+)$/i, 'Saved $1 apps. Skipped: $2'],
+            [/^đã bỏ qua\s+(.+)$/i, 'Skipped $1'],
+            [/^phình quá mức cho phép\s*\(nặng hơn\s*(.+)\s*gb\s*\/\s*giới hạn\s*(.+)\s*gb\)$/i, 'Exceeded size limit (over $1 GB / limit $2 GB)'],
+            [/^ổ ssd chỉ còn trống\s*(.+)\s*gb\s*\(dưới mức bảo vệ tối thiểu\s*(.+)\s*gb\)$/i, 'Free SSD space is $1 GB (below $2 GB safety limit)'],
+            [/^dữ liệu quá lớn so với dung lượng ssd còn trống\s*\(giữ tối thiểu\s*(.+)\s*gb\)$/i, 'Data too large for free SSD space (min $1 GB required)'],
+            [/^phát sinh file vượt ngưỡng\s*(.+)\s*gb khi đang nén.*$/i, 'Exceeded $1 GB limit during compression (Aborted & cleaned)'],
+            [/^ổ ssd chạm ngưỡng đầy dưới\s*(.+)\s*gb khi đang nén.*$/i, 'SSD dropped below $1 GB free during compression (Aborted)'],
+            [/^lỗi thực thi:\s*(.+)$/i, 'Execution error: $1'],
+            [/^đang đẩy lên cloud\s*\((.+)\)\.\.\.$/i, 'Pushing to Cloud ($1)...'],
+            [/^đồng bộ tới\s+(.+)$/i, 'Syncing to $1'],
+            [/^đã đồng bộ\s*\[(.+)\]\s*lên\s+(.+)\s+thành công!?$/i, 'Synced [$1] to $2 successfully!'],
+            [/^đã đồng bộ\s*\[(.+)\]\s*lên\s+(.+)$/i, 'Synced [$1] to $2'],
+            [/^đang tải từ cloud\s*\((.+)\)\.\.\.$/i, 'Pulling from Cloud ($1)...'],
+            [/^kéo dữ liệu từ\s+(.+)$/i, 'Fetching data from $1'],
+            [/^đã tải\s*\[(.+)\]\s*về ssd thành công$/i, 'Pulled [$1] to local SSD'],
+            [/^đang tải\s*\[(.+)\]\s*từ cloud\.\.\.$/i, 'Downloading [$1] from Cloud...'],
+            [/^tải phiên bản\s+(.+)\s+về ssd$/i, 'Downloading version $1 to SSD'],
+            [/^kiểm tra toàn vẹn\s*\[(.+)\]\.\.\.$/i, 'Verifying integrity [$1]...'],
+            [/^đang giải mã\s*\[(.+)\]\.\.\.$/i, 'Decrypting [$1]...'],
+            [/^đang bung dữ liệu\s*\[(.+)\]\.\.\.$/i, 'Extracting [$1]...'],
+            [/^đã phục hồi\s*\[(.+)\]\s*từ\s+(.+)\s*\(bản\s+(.+)\)\s*thành công!?$/i, 'Restored [$1] from $2 ($3) successfully!'],
+            [/^đã tái tạo & phục hồi\s*\[(.+)\]\s*từ\s+(.+)\s*\(bản\s+(.+)\)\s*thành công!?$/i, 'Recreated & restored [$1] from $2 ($3) successfully!']
+          ];
+          for (const [re, rep] of rules) {
+            if (re.test(s)) return s.replace(re, rep);
+          }
+          return s.replace(/Tất cả ứng dụng/gi, 'All Apps');
+        },
         headerReportSummary() {
           const r = this.data.last_report;
           if (!r || !r.report_id) return this.t('subtitle');
@@ -1611,12 +1728,12 @@
           const skipCount = (r.skipped || []).length;
           if (this.lang === 'vi') {
             return skipCount > 0
-              ? `⚠ Đã lưu ${okCount}, bỏ qua ${skipCount} • Xem báo cáo`
-              : `✓ Đã lưu ${okCount} app gần nhất • Xem báo cáo`;
+              ? `Đã lưu ${okCount}, bỏ qua ${skipCount} • Xem báo cáo`
+              : `Đã lưu ${okCount} app gần nhất • Xem báo cáo`;
           }
           return skipCount > 0
-            ? `⚠ ${okCount} saved, ${skipCount} skipped • View report`
-            : `✓ ${okCount} apps backed up • View report`;
+            ? `${okCount} saved, ${skipCount} skipped • View report`
+            : `${okCount} apps backed up • View report`;
         },
         toggleLang() {
           this.lang = this.lang === 'vi' ? 'en' : 'vi';
@@ -1649,47 +1766,61 @@
         },
         appBadgeStyle(name) {
           const n = (name || '').toLowerCase();
-          if (n.includes('homeassistant')) return 'bg-sky-500/15 text-sky-500 border-sky-500/30';
-          if (n.includes('scrypted')) return 'bg-purple-500/15 text-purple-500 border-purple-500/30';
-          if (n.includes('zwave')) return 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30';
-          if (n.includes('uptime')) return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30';
-          if (n.includes('cloudflare')) return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
-          if (n.includes('syncthing')) return 'bg-cyan-500/15 text-cyan-500 border-cyan-500/30';
-          if (n.includes('portainer')) return 'bg-blue-500/15 text-blue-500 border-blue-500/30';
-          if (n.includes('filebrowser')) return 'bg-orange-500/15 text-orange-500 border-orange-500/30';
-          if (n.includes('beszel') || n.includes('glances')) return 'bg-teal-500/15 text-teal-500 border-teal-500/30';
-          if (n.includes('scrutiny')) return 'bg-violet-500/15 text-violet-500 border-violet-500/30';
-          if (n.includes('php') || n.includes('apache') || n.includes('nginx')) return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
-          return 'bg-slate-500/15 text-slate-500 border-slate-500/25';
+          if (n.includes('homeassistant')) return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+          if (n.includes('scrypted')) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+          if (n.includes('cloudflare-hass')) return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+          if (n.includes('cloudflared') || n.includes('cloudflare')) return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+          if (n.includes('beszel')) return 'bg-teal-500/15 text-teal-400 border-teal-500/30';
+          if (n.includes('glances')) return 'bg-lime-500/15 text-lime-400 border-lime-500/30';
+          if (n.includes('uptime')) return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+          if (n.includes('scrutiny')) return 'bg-violet-500/15 text-violet-400 border-violet-500/30';
+          if (n.includes('filebrowser')) return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30';
+          if (n.includes('php') || n.includes('apache') || n.includes('nginx')) return 'bg-rose-500/15 text-rose-400 border-rose-500/30';
+          if (n.includes('zwave')) return 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30';
+          if (n.includes('syncthing')) return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
+          if (n.includes('portainer')) return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+          return 'bg-slate-500/15 text-slate-400 border-slate-500/25';
         },
         appSvgIcon(name) {
           const n = (name || '').toLowerCase();
           if (n.includes('homeassistant')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 .125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>`;
           }
-          if (n.includes('cloudflare')) {
-            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>`;
-          }
-          if (n.includes('zwave')) {
-            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.651a3.75 3.75 0 010-5.303m5.304 0a3.75 3.75 0 010 5.303m-7.425 2.122a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.981 0 13.79M12 12h.008v.007H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`;
-          }
           if (n.includes('scrypted')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>`;
           }
-          if (n.includes('uptime') || n.includes('beszel') || n.includes('glances')) {
-            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l4.5-6 4.5 9 4.5-6 3 3"/></svg>`;
+          if (n.includes('cloudflare-hass')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/><path stroke-linecap="round" stroke-linejoin="round" d="M13 10.5l-2 3.5h3l-2 3.5"/></svg>`;
+          }
+          if (n.includes('cloudflared') || n.includes('cloudflare')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>`;
+          }
+          if (n.includes('beszel')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.9" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z"/></svg>`;
+          }
+          if (n.includes('glances')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>`;
+          }
+          if (n.includes('uptime')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l4.5-6 4.5 9 4.5-6 3 3"/></svg>`;
           }
           if (n.includes('scrutiny')) {
-            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="4.5" rx="1.5"/><rect x="3" y="9.75" width="18" height="4.5" rx="1.5"/><rect x="3" y="16" width="18" height="4.5" rx="1.5"/></svg>`;
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z"/><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z"/></svg>`;
           }
           if (n.includes('filebrowser')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>`;
+          }
+          if (n.includes('php') || n.includes('apache') || n.includes('nginx') || n.includes('web')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/></svg>`;
+          }
+          if (n.includes('zwave')) {
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.651a3.75 3.75 0 010-5.303m5.304 0a3.75 3.75 0 010 5.303m-7.425 2.122a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.981 0 13.79M12 12h.008v.007H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`;
           }
           if (n.includes('syncthing')) {
             return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>`;
           }
           if (n.includes('portainer')) {
-            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/></svg>`;
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>`;
           }
           return `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>`;
         },
@@ -1804,7 +1935,7 @@
           await this.loadOverview(false);
         },
         showToast(msg, type = 'success') {
-          this.toast = { message: msg, type };
+          this.toast = { message: this.translateServerText(msg), type };
           setTimeout(() => { this.toast.message = ''; }, 5000);
         },
         async parseResponse(res) {
@@ -1961,8 +2092,6 @@
           this.restoreModal.open = false;
           if (!snap) return;
 
-          this.task = { active: true, title: `Restore ${snap.app_name}...`, detail: `${snap.version_id} (${source.toUpperCase()})`, progress: 20 };
-          this.startPollingTask();
           try {
             const res = await fetch('/api/restore', {
               method: 'POST',
@@ -1974,9 +2103,9 @@
                 recreate_container: this.recreateContainer
               })
             });
-            const out = await this.parseResponse(res);
-            this.showToast(out.message, 'success');
-            await this.loadOverview(false);
+            await this.parseResponse(res);
+            this.task = { active: true, title: `Restore ${snap.app_name}...`, detail: `${snap.version_id} (${source.toUpperCase()})`, progress: 15 };
+            this.startPollingTask();
           } catch (e) {
             this.showToast(e.message, 'error');
           }

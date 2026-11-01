@@ -838,6 +838,9 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
             if CANCEL_EVENT.is_set():
                 raise TaskCancelledError("Đã hủy khi đang tải lên Cloud")
             manifest["synced_cloud"] = bool(ok)
+            if ok and (target_dir / "manifest.json").exists():
+                with open(target_dir / "manifest.json", "w") as f:
+                    json.dump(manifest, f, indent=2)
 
             if ok and settings.get("backup_mode") == "cloud":
                 shutil.rmtree(target_dir, ignore_errors=True)
@@ -880,6 +883,7 @@ def run_backup_task(app_name, is_scheduled: bool = False):
     report_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     succeeded_list = []
     skipped_list = []
+    update_task(True, "backup", "Đang chuẩn bị...", "", 5, "running")
 
     try:
         if isinstance(app_name, list):
@@ -1354,7 +1358,17 @@ class RestoreRequest(BaseModel):
 
 @app.post("/api/restore")
 def api_restore(req: RestoreRequest):
-    return restore_single_app(req.app_name, req.version_id, req.source, req.recreate_container)
+    if TASK_STATE.get("active"):
+        raise HTTPException(status_code=400, detail="Hệ thống đang chạy một tiến trình khác!")
+    CANCEL_EVENT.clear()
+    update_task(True, "restore", f"Đang bung dữ liệu [{req.app_name}]...", "Đang chuẩn bị...", 10, "running")
+    t = threading.Thread(
+        target=restore_single_app,
+        args=(req.app_name, req.version_id, req.source, req.recreate_container),
+        daemon=True
+    )
+    t.start()
+    return {"status": "started", "message": f"Đang khôi phục [{req.app_name}]..."}
 
 def _background_cloud_purge(remote_target_path: str):
     try:
