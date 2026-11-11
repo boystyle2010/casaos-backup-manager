@@ -4,7 +4,7 @@ on:
   schedule:
     # 13:00 UTC = 06:00 AM MST (Giờ Albuquerque buổi sáng mỗi ngày)
     - cron: "0 13 * * *"
-  workflow_dispatch: # Cho phép bấm "Run workflow" thủ công bất cứ lúc nào
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -17,6 +17,9 @@ on:
 permissions:
   contents: write
   packages: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   auto-update-bases:
@@ -95,6 +98,7 @@ jobs:
           if [[ -n $(git status --porcelain Dockerfile requirements.txt) ]]; then
             git add Dockerfile requirements.txt
             git commit -m "chore(deps): auto-update base images and requirements ($(TZ=America/Denver date +'%Y-%m-%d'))"
+            git pull --rebase origin main
             git push origin HEAD:main
             echo "updated=true" >> $GITHUB_OUTPUT
             echo "✅ Đã commit và push các bản cập nhật mới lên nhánh main!"
@@ -108,6 +112,9 @@ jobs:
     needs: auto-update-bases
     if: |
       always() && (
+        needs.auto-update-bases.result == 'success' ||
+        needs.auto-update-bases.result == 'skipped'
+      ) && (
         github.event_name == 'push' ||
         github.event_name == 'workflow_dispatch' ||
         needs.auto-update-bases.outputs.updated == 'true'
