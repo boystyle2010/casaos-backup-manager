@@ -1,7 +1,7 @@
-fastapi==0.115.0
-uvicorn==0.30.6
-docker==7.1.0
-apscheduler==3.10.4
-jinja2==3.1.4
-python-multipart==0.0.9
-pydantic==2.9.2
+fastapi==0.162.4
+uvicorn==0.54.0
+docker==7.2.0
+apscheduler==3.11.3
+jinja2==3.1.6
+python-multipart==0.0.33
+pydantic==2.14.3

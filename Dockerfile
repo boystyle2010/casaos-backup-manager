@@ -1,6 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 
-ARG RCLONE_VERSION=v1.68.2
+ARG RCLONE_VERSION=v1.76.0
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
