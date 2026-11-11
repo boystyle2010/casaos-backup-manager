@@ -1,8 +1,7 @@
-name: Auto Update Base & Publish Docker Image
+name: Auto Update Base and Publish Docker Image
 
 on:
   schedule:
-    # 13:00 UTC = 06:00 AM MST (Giờ Albuquerque buổi sáng mỗi ngày)
     - cron: "0 13 * * *"
   workflow_dispatch:
   push:
@@ -19,11 +18,11 @@ permissions:
   packages: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   auto-update-bases:
-    name: Check & Commit Latest Bases
+    name: Check and Commit Latest Bases
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     outputs:
@@ -35,90 +34,90 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Latest Python Slim Base, Rclone & PyPI Packages
+      - name: Check Latest Python Slim Base and Rclone and PyPI
         run: |
           set -e
-          echo "=== 1. Kiểm tra phiên bản Python 3.x-slim ổn định mới nhất trên Docker Hub ==="
-          latest_py=$(curl -fsSL "https://hub.docker.com/v2/repositories/library/python/tags/?page_size=100&name=slim" \
-            | jq -r '.results[].name' \
-            | grep -E '^3\.[0-9]+-slim$' \
-            | sort -V \
-            | tail -n 1)
+          rm -f /tmp/changelog_items.txt
+          touch /tmp/changelog_items.txt
 
+          echo "1. Checking Python Slim Base..."
+          latest_py=$(curl -fsSL "https://hub.docker.com/v2/repositories/library/python/tags/?page_size=100&name=slim" | jq -r '.results[].name' | grep -E '^3\.[0-9]+-slim$' | sort -V | tail -n 1)
           current_py=$(grep -E '^FROM python:' Dockerfile | sed 's/FROM python://g' | tr -d '[:space:]')
           if [ -n "$latest_py" ] && [ "$latest_py" != "null" ] && [ "$latest_py" != "$current_py" ]; then
-            echo "Nâng cấp Python Base Image: ${current_py} -> ${latest_py}"
             sed -i "s|^FROM python:.*|FROM python:${latest_py}|g" Dockerfile
-          else
-            echo "Python Base đang ở bản mới nhất (${current_py})."
+            echo "- **Docker Base**: Updated \`python\` from \`${current_py}\` to \`${latest_py}\`." >> /tmp/changelog_items.txt
           fi
 
-          echo "=== 2. Kiểm tra phiên bản Rclone mới nhất ==="
+          echo "2. Checking Rclone Version..."
           latest_rclone=$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}' | tr -d '[:space:]')
           current_rclone=$(grep -E '^ARG RCLONE_VERSION=' Dockerfile | cut -d'=' -f2 | tr -d '[:space:]')
           if [ -n "$latest_rclone" ] && [ "$latest_rclone" != "$current_rclone" ]; then
-            echo "Nâng cấp Rclone: ${current_rclone} -> ${latest_rclone}"
             sed -i "s|^ARG RCLONE_VERSION=.*|ARG RCLONE_VERSION=${latest_rclone}|g" Dockerfile
-          else
-            echo "Rclone đang ở bản mới nhất (${current_rclone})."
+            echo "- **Rclone Engine**: Updated \`rclone\` from \`${current_rclone}\` to \`${latest_rclone}\`." >> /tmp/changelog_items.txt
           fi
 
-          echo "=== 3. Kiểm tra các thư viện trong requirements.txt ==="
+          echo "3. Checking PyPI Requirements..."
           while IFS= read -r line || [ -n "$line" ]; do
             clean_line=$(echo "$line" | tr -d '\r' | xargs)
-            [[ -z "$clean_line" || "$clean_line" =~ ^# ]] && continue
-            
+            if [ -z "$clean_line" ] || echo "$clean_line" | grep -q '^#'; then
+              continue
+            fi
             pkg=$(echo "$clean_line" | awk -F'==' '{print $1}')
             current_ver=$(echo "$clean_line" | awk -F'==' '{print $2}')
-            
             latest_ver=$(curl -fsSL "https://pypi.org/pypi/${pkg}/json" | jq -r '.info.version')
             if [ -n "$latest_ver" ] && [ "$latest_ver" != "null" ] && [ "$latest_ver" != "$current_ver" ]; then
-              echo "Nâng cấp ${pkg}: ${current_ver} -> ${latest_ver}"
               sed -i "s|^${pkg}==.*|${pkg}==${latest_ver}|g" requirements.txt
-            else
-              echo "${pkg} đang ở bản mới nhất (${current_ver})."
+              echo "- **Python Package**: Updated \`${pkg}\` from \`${current_ver}\` to \`${latest_ver}\`." >> /tmp/changelog_items.txt
             fi
           done < requirements.txt
 
       - name: Test Docker Build Before Committing
         run: |
-          if [[ -n $(git status --porcelain Dockerfile requirements.txt) ]]; then
-            echo "Phát hiện bản cập nhật mới! Đang chạy kiểm tra Docker Build thử nghiệm..."
+          if [ -s /tmp/changelog_items.txt ]; then
+            echo "Updates detected. Running test build..."
             docker build -t casaos-backup-manager:test .
           else
-            echo "Không có thay đổi nào cần kiểm tra build."
+            echo "No updates detected."
           fi
 
-      - name: Auto Commit & Push Updated Files
+      - name: Update CHANGELOG and Commit
         id: commit_changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -s /tmp/changelog_items.txt ]; then
+            TODAY=$(TZ=America/Denver date +'%Y-%m-%d')
+            python3 -c '
+          import pathlib, os
+          today = os.environ.get("TODAY", "")
+          items = pathlib.Path("/tmp/changelog_items.txt").read_text().strip()
+          p = pathlib.Path("CHANGELOG.md")
+          marker = "<!-- AUTO-CHANGELOG-ENTRY -->"
+          entry = f"{marker}\n\n## [Auto-Update] - {today}\n### Changed\n{items}"
+          if p.exists():
+              content = p.read_text()
+              if marker in content:
+                  content = content.replace(marker, entry, 1)
+              else:
+                  content = entry + "\n\n" + content
+          else:
+              content = "# Changelog\n\n" + entry + "\n"
+          p.write_text(content)
+          ' TODAY="$TODAY"
 
-          if [[ -n $(git status --porcelain Dockerfile requirements.txt) ]]; then
-            git add Dockerfile requirements.txt
-            git commit -m "chore(deps): auto-update base images and requirements ($(TZ=America/Denver date +'%Y-%m-%d'))"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Dockerfile requirements.txt CHANGELOG.md
+            git commit -m "chore(deps): auto-update base packages (${TODAY})"
             git pull --rebase origin main
             git push origin HEAD:main
-            echo "updated=true" >> $GITHUB_OUTPUT
-            echo "✅ Đã commit và push các bản cập nhật mới lên nhánh main!"
+            echo "updated=true" >> "$GITHUB_OUTPUT"
           else
-            echo "updated=false" >> $GITHUB_OUTPUT
-            echo "✨ Mọi gói Base và thư viện đều đã ở phiên bản mới nhất."
+            echo "updated=false" >> "$GITHUB_OUTPUT"
           fi
 
   build-and-push-image:
-    name: Build & Publish Docker Image to GHCR
+    name: Build and Publish Docker Image to GHCR
     needs: auto-update-bases
-    if: |
-      always() && (
-        needs.auto-update-bases.result == 'success' ||
-        needs.auto-update-bases.result == 'skipped'
-      ) && (
-        github.event_name == 'push' ||
-        github.event_name == 'workflow_dispatch' ||
-        needs.auto-update-bases.outputs.updated == 'true'
-      )
+    if: always() && (needs.auto-update-bases.result == 'success' || needs.auto-update-bases.result == 'skipped') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.auto-update-bases.outputs.updated == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Latest Code
@@ -129,20 +128,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry (GHCR)
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare Image Metadata & Tags
+      - name: Prepare Image Metadata
         id: meta
         run: |
           IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           BUILD_DATE=$(TZ=America/Denver date +'%Y.%m.%d')
-          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
-          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
 
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
@@ -152,7 +151,7 @@ jobs:
           platforms: linux/amd64
           labels: |
             org.opencontainers.image.title=CasaOS Backup Manager
-            org.opencontainers.image.description=Self-contained Backup & Recovery Manager for CasaOS and Portainer
+            org.opencontainers.image.description=Self-contained Backup and Recovery Manager for CasaOS
             org.opencontainers.image.url=https://github.com/boystyle2010/casaos-backup-manager
             org.opencontainers.image.source=https://github.com/boystyle2010/casaos-backup-manager
             io.casaos.icon=https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/icon.png
