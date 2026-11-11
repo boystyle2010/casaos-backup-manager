@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-ARG RCLONE_VERSION=current
+ARG RCLONE_VERSION=v1.68.2
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     zstd \
     openssl \
     ca-certificates \
-    && curl -fsSL https://downloads.rclone.org/${RCLONE_VERSION}/rclone-current-linux-amd64.deb -o /tmp/rclone.deb \
+    && curl -fsSL "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.deb" -o /tmp/rclone.deb \
     && dpkg -i /tmp/rclone.deb \
     && rm -f /tmp/rclone.deb \
     && rm -rf /var/lib/apt/lists/*
