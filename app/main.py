@@ -1203,7 +1203,7 @@ threading.Thread(target=enforce_all_retentions, daemon=True).start()
 # ================= API ENDPOINTS =================
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/api/task-status")
 def api_task_status():
