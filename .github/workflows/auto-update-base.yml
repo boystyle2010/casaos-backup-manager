@@ -1,0 +1,156 @@
+name: Auto Update Base & Publish Docker Image
+
+on:
+  schedule:
+    # 13:00 UTC = 06:00 AM MST (Giờ Albuquerque buổi sáng mỗi ngày)
+    - cron: "0 13 * * *"
+  workflow_dispatch: # Cho phép bấm "Run workflow" thủ công bất cứ lúc nào
+  push:
+    branches:
+      - main
+    paths:
+      - "Dockerfile"
+      - "requirements.txt"
+      - "app/**"
+      - "icon.png"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  auto-update-bases:
+    name: Check & Commit Latest Bases
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    outputs:
+      updated: ${{ steps.commit_changes.outputs.updated }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check Latest Python Slim Base, Rclone & PyPI Packages
+        run: |
+          set -e
+          echo "=== 1. Kiểm tra phiên bản Python 3.x-slim ổn định mới nhất trên Docker Hub ==="
+          latest_py=$(curl -fsSL "https://hub.docker.com/v2/repositories/library/python/tags/?page_size=100&name=slim" \
+            | jq -r '.results[].name' \
+            | grep -E '^3\.[0-9]+-slim$' \
+            | sort -V \
+            | tail -n 1)
+
+          current_py=$(grep -E '^FROM python:' Dockerfile | sed 's/FROM python://g' | tr -d '[:space:]')
+          if [ -n "$latest_py" ] && [ "$latest_py" != "null" ] && [ "$latest_py" != "$current_py" ]; then
+            echo "Nâng cấp Python Base Image: ${current_py} -> ${latest_py}"
+            sed -i "s|^FROM python:.*|FROM python:${latest_py}|g" Dockerfile
+          else
+            echo "Python Base đang ở bản mới nhất (${current_py})."
+          fi
+
+          echo "=== 2. Kiểm tra phiên bản Rclone mới nhất ==="
+          latest_rclone=$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}' | tr -d '[:space:]')
+          current_rclone=$(grep -E '^ARG RCLONE_VERSION=' Dockerfile | cut -d'=' -f2 | tr -d '[:space:]')
+          if [ -n "$latest_rclone" ] && [ "$latest_rclone" != "$current_rclone" ]; then
+            echo "Nâng cấp Rclone: ${current_rclone} -> ${latest_rclone}"
+            sed -i "s|^ARG RCLONE_VERSION=.*|ARG RCLONE_VERSION=${latest_rclone}|g" Dockerfile
+          else
+            echo "Rclone đang ở bản mới nhất (${current_rclone})."
+          fi
+
+          echo "=== 3. Kiểm tra các thư viện trong requirements.txt ==="
+          while IFS= read -r line || [ -n "$line" ]; do
+            clean_line=$(echo "$line" | tr -d '\r' | xargs)
+            [[ -z "$clean_line" || "$clean_line" =~ ^# ]] && continue
+            
+            pkg=$(echo "$clean_line" | awk -F'==' '{print $1}')
+            current_ver=$(echo "$clean_line" | awk -F'==' '{print $2}')
+            
+            latest_ver=$(curl -fsSL "https://pypi.org/pypi/${pkg}/json" | jq -r '.info.version')
+            if [ -n "$latest_ver" ] && [ "$latest_ver" != "null" ] && [ "$latest_ver" != "$current_ver" ]; then
+              echo "Nâng cấp ${pkg}: ${current_ver} -> ${latest_ver}"
+              sed -i "s|^${pkg}==.*|${pkg}==${latest_ver}|g" requirements.txt
+            else
+              echo "${pkg} đang ở bản mới nhất (${current_ver})."
+            fi
+          done < requirements.txt
+
+      - name: Test Docker Build Before Committing
+        run: |
+          if [[ -n $(git status --porcelain Dockerfile requirements.txt) ]]; then
+            echo "Phát hiện bản cập nhật mới! Đang chạy kiểm tra Docker Build thử nghiệm..."
+            docker build -t casaos-backup-manager:test .
+          else
+            echo "Không có thay đổi nào cần kiểm tra build."
+          fi
+
+      - name: Auto Commit & Push Updated Files
+        id: commit_changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain Dockerfile requirements.txt) ]]; then
+            git add Dockerfile requirements.txt
+            git commit -m "chore(deps): auto-update base images and requirements ($(TZ=America/Denver date +'%Y-%m-%d'))"
+            git push origin HEAD:main
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "✅ Đã commit và push các bản cập nhật mới lên nhánh main!"
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "✨ Mọi gói Base và thư viện đều đã ở phiên bản mới nhất."
+          fi
+
+  build-and-push-image:
+    name: Build & Publish Docker Image to GHCR
+    needs: auto-update-bases
+    if: |
+      always() && (
+        github.event_name == 'push' ||
+        github.event_name == 'workflow_dispatch' ||
+        needs.auto-update-bases.outputs.updated == 'true'
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Latest Code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Image Metadata & Tags
+        id: meta
+        run: |
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          BUILD_DATE=$(TZ=America/Denver date +'%Y.%m.%d')
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          labels: |
+            org.opencontainers.image.title=CasaOS Backup Manager
+            org.opencontainers.image.description=Self-contained Backup & Recovery Manager for CasaOS and Portainer
+            org.opencontainers.image.url=https://github.com/boystyle2010/casaos-backup-manager
+            org.opencontainers.image.source=https://github.com/boystyle2010/casaos-backup-manager
+            io.casaos.icon=https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/icon.png
+          tags: |
+            ${{ steps.meta.outputs.image_name }}:latest
+            ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

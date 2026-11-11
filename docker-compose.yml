@@ -1,79 +1,66 @@
 name: casaos-backup-manager
 services:
-    backup-manager:
-        build:
-            context: /DATA/AppData/casaos-backup-manager
-            dockerfile: Dockerfile
-        cpu_shares: 90
-        command: []
-        container_name: casaos-backup-manager
-        deploy:
-            resources:
-                limits:
-                    memory: "7613710336"
-        environment:
-            BACKUP_ROOT: /DATA/Backups
-            TZ: America/Denver
-        hostname: casaos-backup-manager
-        image: casaos-backup-manager:latest
-        labels:
-            icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/rclone.png
-        networks:
-            default: null
-        ports:
-            - mode: ingress
-              target: 8095
-              published: "8095"
-              protocol: tcp
-        restart: unless-stopped
-        volumes:
-            - type: bind
-              source: /var/run/docker.sock
-              target: /var/run/docker.sock
-              bind:
-                create_host_path: true
-            - type: bind
-              source: /DATA
-              target: /DATA
-              bind:
-                create_host_path: true
-            - type: bind
-              source: /var/lib/docker/volumes
-              target: /var/lib/docker/volumes
-              bind:
-                create_host_path: true
-            - type: bind
-              source: /DATA/AppData/casaos-backup-manager/config
-              target: /root/.config/rclone
-              bind:
-                create_host_path: true
-            - type: bind
-              source: /DATA/AppData/casaos-backup-manager/app
-              target: /app
-              bind:
-                create_host_path: true
-        x-casaos:
-            author: self
-            category: Utilities
-            hostname: ""
-            icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/icloud.png
-            index: /
-            port_map: "8095"
-            scheme: http
-            title:
-                en: Backup Manager
-                en_us: Backup Manager
+  backup-manager:
+    image: ghcr.io/boystyle2010/casaos-backup-manager:latest
+    build:
+      context: /DATA/AppData/casaos-backup-manager
+      dockerfile: Dockerfile
+    container_name: casaos-backup-manager
+    hostname: casaos-backup-manager
+    restart: unless-stopped
+    cpu_shares: 90
+    deploy:
+      resources:
+        limits:
+          memory: "7613710336"
+    environment:
+      BACKUP_ROOT: /DATA/Backups
+      TZ: America/Denver # Múi giờ Albuquerque
+    ports:
+      - mode: ingress
+        target: 8095
+        published: "8095"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: bind
+        source: /DATA
+        target: /DATA
+      - type: bind
+        source: /var/lib/docker/volumes
+        target: /var/lib/docker/volumes
+      - type: bind
+        source: /DATA/AppData/casaos-backup-manager/config
+        target: /root/.config/rclone
+    labels:
+      # Liên kết đến file ảnh icon bạn vừa tải lên repo GitHub boystyle2010
+      icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/assets/icon_3d.png
+    x-casaos:
+      author: boystyle2010
+      category: Utilities
+      hostname: ""
+      icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/assets/icon_3d.png
+      index: /
+      port_map: "8095"
+      scheme: http
+      title:
+        en: Backup Manager
+        en_us: Backup Manager
+
 networks:
-    default:
-        name: casaos-backup-manager_default
+  default:
+    name: casaos-backup-manager_default
+
 x-casaos:
-    author: self
-    category: self
-    hostname: ""
-    icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/rclone.png
-    index: /
-    is_uncontrolled: false
-    port_map: ""
-    scheme: http
-    title:
-        custom: Backup Manager
+  author: boystyle2010
+  category: self
+  hostname: ""
+  icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/assets/icon_3d.png
+  index: /
+  is_uncontrolled: false
+  port_map: "8095"
+  scheme: http
+  title:
+    custom: Backup Manager

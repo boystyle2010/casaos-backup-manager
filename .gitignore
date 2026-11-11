@@ -1,7 +1,6 @@
+config/
+*.conf
+*.log
 __pycache__/
 *.pyc
-*.tar.gz
-*.enc
-extract_tmp/
-auto-push.sh
-*.bak
+.env
