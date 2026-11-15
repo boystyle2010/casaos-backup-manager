@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Auto-Update] - 
 ### Changed
+- **Python Package**: Updated `fastapi` from `0.163.0` to `0.163.1`.
+
+## [Auto-Update] - 
+### Changed
 - **Python Package**: Updated `fastapi` from `0.162.7` to `0.163.0`.
 
 ## [Auto-Update] - 
