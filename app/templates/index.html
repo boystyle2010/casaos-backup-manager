@@ -1949,11 +1949,21 @@
           setTimeout(() => { this.toast.message = ''; }, 5000);
         },
         async parseResponse(res) {
+          if (res.status === 401) {
+            location.replace('/login?rd=' + encodeURIComponent(location.pathname + location.search));
+            return new Promise(() => {});
+          }
           const text = await res.text();
           let json = {};
           try { json = JSON.parse(text); } catch (e) { throw new Error(text || `HTTP ${res.status}`); }
           if (!res.ok) throw new Error(json.detail || json.message || `Error ${res.status}`);
           return json;
+        },
+        async logout() {
+          try {
+            await fetch('/api/logout', { method: 'POST', headers: { 'X-CBM-CSRF': '1' } });
+          } catch (e) {}
+          location.replace('/login');
         },
         async loadOverview(refreshCloud = false) {
           try {
