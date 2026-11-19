@@ -1,45 +1,18 @@
 # Changelog
 
-All notable changes, base image updates, and dependency upgrades to **CasaOS Backup Manager Pro** are documented in this file.
+## 1.0.1
+_Released: 2026-11-19_
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this file is automatically maintained by our GitHub Actions Bot whenever new base images (`python-slim`, `rclone`) or Python packages are released.
+### 📦 Component & Version Matrix
+- **Docker Image Release:** Bumped from `v1.0.0` ➡️ **`v1.0.1`**
+- **Supported Architectures:** `linux/amd64` & `linux/arm64` *(Multi-Arch GHCR Manifest)*
+- **Python Base Image:** `python:3.15-slim`
+- **Rclone Engine:** `v1.76.0`
+- **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `Pydantic 2.14.4` • `APScheduler 3.11.3`
 
-<!-- AUTO-CHANGELOG-ENTRY -->
+### 🔐 Package Integrity (GHCR Multi-Arch)
+- **Image Tag:** `ghcr.io/boystyle2010/casaos-backup-manager:v1.0.1` (`sha256:aba735fae21891c7856506babfc1389fd0a959792936fe793d30a12b26b5d139`)
+- **Latest Tag:** `ghcr.io/boystyle2010/casaos-backup-manager:latest`
 
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `fastapi` from `0.163.2` to `0.165.0`.
-
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `fastapi` from `0.163.1` to `0.163.2`.
-
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `python-multipart` from `0.0.33` to `0.0.34`.
-
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `fastapi` from `0.163.0` to `0.163.1`.
-
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `fastapi` from `0.162.7` to `0.163.0`.
-
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `fastapi` from `0.162.5` to `0.162.7`.
-
-## [Auto-Update] - 
-### Changed
-- **Python Package**: Updated `fastapi` from `0.162.4` to `0.162.5`.
-
-## [2026-11-10] - Initial Public Release & CI/CD Automation
-
-### Added
-- **Automated Daily Base Updater**: GitHub Actions workflow running daily at `06:00 AM (America/Denver)` to check Docker Hub (`python:3.x-slim`), Rclone releases, and PyPI packages, verify Docker builds, update `CHANGELOG.md`, and publish images to `ghcr.io/boystyle2010/casaos-backup-manager`.
-- **3D Transparent App Icon**: Custom 512×512 RGBA `icon.png` integrated at the repository root for CasaOS and Portainer dashboards.
-- **Smart SSD Disk Guard**: Per-container maximum size threshold (`max_app_size_gb`) and minimum free SSD space protection (`min_free_ssd_gb`).
-- **Admin Session Report Modal**: Detailed post-backup summary highlighting succeeded backups and skipped/oversize containers.
-- **1-Tap Cloud Recovery Key (`CBMKEY`)**: Instant export and import of Rclone configuration and application settings.
-- **Bilingual Glassmorphic UI**: Full English and Vietnamese localization with dark/light mode support.
+### 🚀 What's Changed
+- **Python Package (`pydantic`):** Updated from `2.14.3` ➡️ **`2.14.4`**
