@@ -1244,6 +1244,73 @@ reload_scheduler()
 threading.Thread(target=enforce_all_retentions, daemon=True).start()
 
 # ================= API ENDPOINTS =================
+@app.get("/api/health")
+def api_health():
+    return {"status": "ok"}
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    if not ADMIN_PASS or verify_session_cookie(request.cookies.get("cbm_sess", "")):
+        return RedirectResponse(url="/", status_code=302)
+    return templates.TemplateResponse(request=request, name="login.html")
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    remember: bool = True
+
+@app.post("/api/login")
+async def api_login(req: LoginRequest, request: Request):
+    if request.headers.get("x-cbm-csrf") != "1":
+        raise HTTPException(status_code=403, detail="Missing CSRF header")
+    if not ADMIN_PASS:
+        return {"ok": True}
+
+    ip = _client_ip(request)
+    now = time.time()
+    with _LOGIN_LOCK:
+        recent = [t for t in _LOGIN_FAILS.get(ip, []) if now - t < 300]
+        _LOGIN_FAILS[ip] = recent
+        if len(recent) >= 10:
+            raise HTTPException(status_code=429, detail="Thử sai quá nhiều lần. Vui lòng đợi 5 phút.")
+
+    ok = hmac.compare_digest(req.username.strip(), ADMIN_USER) and hmac.compare_digest(req.password, ADMIN_PASS)
+    if not ok:
+        with _LOGIN_LOCK:
+            _LOGIN_FAILS.setdefault(ip, []).append(now)
+        time.sleep(0.4)
+        raise HTTPException(status_code=401, detail="Sai tên đăng nhập hoặc mật khẩu")
+
+    with _LOGIN_LOCK:
+        _LOGIN_FAILS.pop(ip, None)
+
+    ttl = 30 * 86400 if req.remember else 86400
+    token = create_session_cookie(ADMIN_USER, ttl)
+    is_https = (
+        request.headers.get("x-forwarded-proto", "").lower() == "https"
+        or "https" in request.headers.get("cf-visitor", "").lower()
+        or request.url.scheme == "https"
+    )
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie(
+        key="cbm_sess",
+        value=token,
+        max_age=ttl,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+    )
+    return resp
+
+@app.post("/api/logout")
+async def api_logout(request: Request):
+    if request.headers.get("x-cbm-csrf") != "1":
+        raise HTTPException(status_code=403, detail="Missing CSRF header")
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(key="cbm_sess", path="/")
+    return resp
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
