@@ -3,6 +3,8 @@ import json
 import time
 import base64
 import shutil
+import re
+import hmac
 import hashlib
 import tarfile
 import threading
@@ -12,7 +14,7 @@ from pathlib import Path
 
 import docker
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -21,6 +23,40 @@ from apscheduler.triggers.cron import CronTrigger
 app = FastAPI(title="CasaOS Backup Manager")
 templates = Jinja2Templates(directory="templates")
 
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "")
+SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+@app.middleware("http")
+async def optional_basic_auth(request: Request, call_next):
+    if ADMIN_PASS:
+        auth = request.headers.get("Authorization", "")
+        ok = False
+        if auth.startswith("Basic "):
+            try:
+                u, p = base64.b64decode(auth[6:]).decode("utf-8").split(":", 1)
+                ok = hmac.compare_digest(u, ADMIN_USER) and hmac.compare_digest(p, ADMIN_PASS)
+            except Exception:
+                ok = False
+        if not ok:
+            return Response(
+                "Unauthorized",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="CasaOS Backup Manager"'}
+            )
+    return await call_next(request)
+
+def validate_safe_segment(val: str) -> str:
+    if not val or val in (".", "..") or not SAFE_NAME_RE.match(val):
+        raise HTTPException(status_code=400, detail="Tên ứng dụng hoặc phiên bản không hợp lệ!")
+    return val
+
+def atomic_write_json(filepath: Path, data: dict):
+    tmp = filepath.with_suffix(filepath.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, filepath)
+    
 BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", "/DATA/Backups"))
 APPS_BACKUP_DIR = BACKUP_ROOT / "apps"
 SETTINGS_FILE = BACKUP_ROOT / "settings.json"
@@ -142,8 +178,7 @@ def load_last_report() -> dict:
 
 def save_last_report(report: dict):
     with REPORT_LOCK:
-        with open(LAST_REPORT_FILE, "w") as f:
-            json.dump(report, f, indent=2)
+        atomic_write_json(LAST_REPORT_FILE, report)
 
 def run_cancellable_cmd(cmd: list, timeout: int = 900, extra_env: dict = None):
     global ACTIVE_PROC
@@ -189,8 +224,7 @@ def load_settings():
     return DEFAULT_SETTINGS.copy()
 
 def save_settings(settings: dict):
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f, indent=2)
+    atomic_write_json(SETTINGS_FILE, settings)
 
 def sha256sum(filepath: Path) -> str:
     h = hashlib.sha256()
@@ -318,8 +352,7 @@ def load_cloud_cache() -> dict:
 
 def save_cloud_cache(cache: dict):
     with CACHE_LOCK:
-        with open(CLOUD_INDEX_CACHE, "w") as f:
-            json.dump(cache, f, indent=2)
+        atomic_write_json(CLOUD_INDEX_CACHE, cache)
 
 def refresh_cloud_cache():
     settings = load_settings()
