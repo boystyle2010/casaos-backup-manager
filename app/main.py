@@ -1412,6 +1412,7 @@ def api_overview(refresh_cloud: bool = False):
             pass
 
     return {
+        "auth_enabled": bool(ADMIN_PASS),
         "disk": {
             "total_gb": round(total / (1024**3), 1),
             "used_gb": round(used / (1024**3), 1),
