@@ -1375,6 +1375,8 @@ def api_backup_batch(req: BatchBackupRequest):
         raise HTTPException(status_code=400, detail="Hệ thống đang chạy một tiến trình khác!")
     if not req.app_names:
         raise HTTPException(status_code=400, detail="Chưa chọn ứng dụng nào!")
+    for name in req.app_names:
+        validate_safe_segment(name)
     CANCEL_EVENT.clear()
     update_task(True, "backup", f"Khởi tạo sao lưu ({len(req.app_names)} ứng dụng)...", ", ".join(req.app_names), 5, "running")
     t = threading.Thread(target=run_backup_task, args=(req.app_names,), daemon=True)
@@ -1383,6 +1385,7 @@ def api_backup_batch(req: BatchBackupRequest):
 
 @app.post("/api/backup/{app_name}")
 def api_backup_app(app_name: str):
+    validate_safe_segment(app_name)
     if TASK_STATE.get("active"):
         raise HTTPException(status_code=400, detail="Hệ thống đang chạy một tiến trình khác!")
     CANCEL_EVENT.clear()
@@ -1399,6 +1402,8 @@ class RestoreRequest(BaseModel):
 
 @app.post("/api/restore")
 def api_restore(req: RestoreRequest):
+    validate_safe_segment(req.app_name)
+    validate_safe_segment(req.version_id)
     if TASK_STATE.get("active"):
         raise HTTPException(status_code=400, detail="Hệ thống đang chạy một tiến trình khác!")
     CANCEL_EVENT.clear()
@@ -1422,6 +1427,8 @@ def _background_cloud_purge(remote_target_path: str):
 
 @app.delete("/api/backup/{app_name}/{version_id}")
 def api_delete_backup(app_name: str, version_id: str, target: str = "both"):
+    validate_safe_segment(app_name)
+    validate_safe_segment(version_id)
     app_dir = APPS_BACKUP_DIR / app_name
     settings = load_settings()
     remote = settings.get("rclone_remote", "").strip().rstrip("/")
@@ -1487,6 +1494,7 @@ class CloudActionRequest(BaseModel):
 
 @app.post("/api/cloud/sync-up")
 def api_cloud_sync_up(req: CloudActionRequest = CloudActionRequest()):
+    validate_safe_segment(req.app_name)
     if TASK_STATE.get("active"):
         raise HTTPException(status_code=400, detail="Hệ thống đang bận!")
     CANCEL_EVENT.clear()
@@ -1497,6 +1505,7 @@ def api_cloud_sync_up(req: CloudActionRequest = CloudActionRequest()):
 
 @app.post("/api/cloud/pull-catalog")
 def api_cloud_pull(req: CloudActionRequest = CloudActionRequest()):
+    validate_safe_segment(req.app_name)
     if TASK_STATE.get("active"):
         raise HTTPException(status_code=400, detail="Hệ thống đang bận!")
     settings = load_settings()
