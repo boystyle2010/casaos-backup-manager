@@ -1,16 +1,16 @@
 import os
+import re
+import hmac
 import json
 import time
 import base64
 import shutil
-import re
-import hmac
 import secrets
-import urllib.parse
 import hashlib
 import tarfile
 import threading
 import subprocess
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 
@@ -25,28 +25,63 @@ from apscheduler.triggers.cron import CronTrigger
 app = FastAPI(title="CasaOS Backup Manager")
 templates = Jinja2Templates(directory="templates")
 
+BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", "/DATA/Backups"))
+APPS_BACKUP_DIR = BACKUP_ROOT / "apps"
+SETTINGS_FILE = BACKUP_ROOT / "settings.json"
+CLOUD_INDEX_CACHE = BACKUP_ROOT / "cloud_index_cache.json"
+LAST_REPORT_FILE = BACKUP_ROOT / "last_run_report.json"
+RCLONE_CONFIG_PATH = Path("/root/.config/rclone/rclone.conf")
+
+APPS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+RCLONE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# ================= BẢO MẬT & ĐĂNG NHẬP SESSION =================
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "")
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
-@app.middleware("http")
-async def optional_basic_auth(request: Request, call_next):
-    if ADMIN_PASS:
-        auth = request.headers.get("Authorization", "")
-        ok = False
-        if auth.startswith("Basic "):
-            try:
-                u, p = base64.b64decode(auth[6:]).decode("utf-8").split(":", 1)
-                ok = hmac.compare_digest(u, ADMIN_USER) and hmac.compare_digest(p, ADMIN_PASS)
-            except Exception:
-                ok = False
-        if not ok:
-            return Response(
-                "Unauthorized",
-                status_code=401,
-                headers={"WWW-Authenticate": 'Basic realm="CasaOS Backup Manager"'}
-            )
-    return await call_next(request)
+SESSION_SECRET_FILE = BACKUP_ROOT / ".session_secret"
+if not SESSION_SECRET_FILE.exists():
+    SESSION_SECRET_FILE.write_text(secrets.token_hex(32))
+    try:
+        os.chmod(SESSION_SECRET_FILE, 0o600)
+    except Exception:
+        pass
+_RAW_SECRET = SESSION_SECRET_FILE.read_text().strip()
+_LOGIN_FAILS: dict[str, list[float]] = {}
+_LOGIN_LOCK = threading.Lock()
+
+def _session_key() -> bytes:
+    # Kết hợp secret + user + pass: đổi mật khẩu trong Compose sẽ tự đăng xuất các máy cũ
+    return hashlib.sha256(f"{_RAW_SECRET}:{ADMIN_USER}:{ADMIN_PASS}".encode("utf-8")).digest()
+
+def create_session_cookie(username: str, ttl: int) -> str:
+    exp = int(time.time()) + ttl
+    payload = base64.urlsafe_b64encode(f"{username}|{exp}".encode("utf-8")).decode("ascii")
+    sig = hmac.new(_session_key(), payload.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+def verify_session_cookie(token: str) -> bool:
+    if not token or "." not in token:
+        return False
+    try:
+        payload, sig = token.rsplit(".", 1)
+        expected = hmac.new(_session_key(), payload.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return False
+        decoded = base64.urlsafe_b64decode(payload.encode("ascii")).decode("utf-8")
+        user, exp_str = decoded.rsplit("|", 1)
+        return hmac.compare_digest(user, ADMIN_USER) and int(exp_str) > int(time.time())
+    except Exception:
+        return False
+
+def _client_ip(request: Request) -> str:
+    return (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "local")
+    )
 
 def validate_safe_segment(val: str) -> str:
     if not val or val in (".", "..") or not SAFE_NAME_RE.match(val):
@@ -58,16 +93,24 @@ def atomic_write_json(filepath: Path, data: dict):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, filepath)
-    
-BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", "/DATA/Backups"))
-APPS_BACKUP_DIR = BACKUP_ROOT / "apps"
-SETTINGS_FILE = BACKUP_ROOT / "settings.json"
-CLOUD_INDEX_CACHE = BACKUP_ROOT / "cloud_index_cache.json"
-LAST_REPORT_FILE = BACKUP_ROOT / "last_run_report.json"
-RCLONE_CONFIG_PATH = Path("/root/.config/rclone/rclone.conf")
 
-APPS_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-RCLONE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+@app.middleware("http")
+async def session_auth_middleware(request: Request, call_next):
+    if not ADMIN_PASS:
+        return await call_next(request)
+
+    path = request.url.path
+    if path in ("/login", "/api/login", "/api/logout", "/api/health"):
+        return await call_next(request)
+
+    if verify_session_cookie(request.cookies.get("cbm_sess", "")):
+        return await call_next(request)
+
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+    rd = request.url.path + (("?" + request.url.query) if request.url.query else "")
+    return RedirectResponse(url=f"/login?rd={urllib.parse.quote(rd, safe='/')}", status_code=302)
 
 IGNORED_MOUNT_SOURCES = [
     "/var/run/docker.sock",
