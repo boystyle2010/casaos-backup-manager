@@ -11,7 +11,7 @@ _Released: 2026-11-19_
 - **Core Python Stack:** `FastAPI 0.165.0` • `Uvicorn 0.54.0` • `Docker SDK 7.2.0` • `Pydantic 2.14.4` • `APScheduler 3.11.3`
 
 ### 🔐 Package Integrity (GHCR Multi-Arch)
-- **Image Tag:** `ghcr.io/boystyle2010/casaos-backup-manager:v1.0.10` (`sha256:0251d014ae03657be3aeb688c00f3a2e348b7a5ccb39b45b56159d6c63427903`)
+- **Image Tag:** `ghcr.io/boystyle2010/casaos-backup-manager:v1.0.10` (`sha256:9da7993573328ed733862c9d7968006cbef624c52e9d760de85cb07d679d483a`)
 - **Latest Tag:** `ghcr.io/boystyle2010/casaos-backup-manager:latest`
 
 ### 🚀 What's Changed
