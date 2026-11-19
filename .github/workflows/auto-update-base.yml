@@ -1,4 +1,4 @@
-name: Auto Update Base and Publish Docker Image
+name: CasaOS Backup Manager - Auto Update, Multi-Arch Publish & Release
 
 on:
   schedule:
@@ -12,51 +12,78 @@ on:
       - "requirements.txt"
       - "app/**"
       - "icon.png"
+      - ".github/workflows/auto-update-base.yml"
 
 permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: casaos-backup-manager-pipeline
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  auto-update-bases:
-    name: Check and Commit Latest Bases
+  build-publish-release:
+    name: "🚀 CasaOS Backup Manager CI/CD"
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    outputs:
-      updated: ${{ steps.commit_changes.outputs.updated }}
+    timeout-minutes: 30
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
     steps:
-      - name: Checkout Repository
+      - name: "📥 1. Checkout Repository"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check Latest Python Slim Base and Rclone and PyPI
+      - name: "🔍 2. Check Python Base, Rclone & PyPI Packages (Multi-Arch Verified)"
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           rm -f /tmp/changelog_items.txt
           touch /tmp/changelog_items.txt
 
-          echo "1. Checking Python Slim Base..."
-          latest_py=$(curl -fsSL "https://hub.docker.com/v2/repositories/library/python/tags/?page_size=100&name=slim" | jq -r '.results[].name' | grep -E '^3\.[0-9]+-slim$' | sort -V | tail -n 1)
-          current_py=$(grep -E '^FROM python:' Dockerfile | sed 's/FROM python://g' | tr -d '[:space:]')
-          if [ -n "$latest_py" ] && [ "$latest_py" != "null" ] && [ "$latest_py" != "$current_py" ]; then
-            sed -i "s|^FROM python:.*|FROM python:${latest_py}|g" Dockerfile
-            echo "- **Docker Base**: Updated \`python\` from \`${current_py}\` to \`${latest_py}\`." >> /tmp/changelog_items.txt
+          CUR_PY=$(grep -E '^FROM python:' Dockerfile | sed 's/FROM python://g' | tr -d ' \r\n')
+          CUR_RCLONE=$(grep -E '^ARG RCLONE_VERSION=' Dockerfile | cut -d'=' -f2 | tr -d '" \r\n')
+          CUR_APP=$(grep -E '^ARG APP_VERSION=' Dockerfile | cut -d'=' -f2 | tr -d '" \r\n' || true)
+          [ -z "$CUR_APP" ] && CUR_APP="1.0.0"
+
+          NEW_PY="$CUR_PY"
+          NEW_RCLONE="$CUR_RCLONE"
+          PY_UPDATED="false"
+          DEP_UPDATED="false"
+
+          # 1. Kiểm tra Python Slim Base (xác nhận đủ cả amd64 & arm64 trên Docker Hub)
+          CAND_PY=$(curl -fsSL "https://hub.docker.com/v2/repositories/library/python/tags/?page_size=100&name=slim" \
+            | jq -r '.results[].name' | grep -E '^3\.[0-9]+-slim$' | sort -V | tail -n 1 || echo "")
+          if [ -n "$CAND_PY" ] && [ "$CAND_PY" != "$CUR_PY" ]; then
+            if docker manifest inspect "python:${CAND_PY}" 2>/dev/null \
+               | jq -e '[.manifests[]?.platform.architecture] | (index("amd64") != null and index("arm64") != null)' >/dev/null 2>&1; then
+              NEW_PY="$CAND_PY"
+              PY_UPDATED="true"
+              sed -i "s|^FROM python:.*|FROM python:${NEW_PY}|g" Dockerfile
+              echo "- **Python Base Image:** Upgraded from \`python:${CUR_PY}\` ➡️ **\`python:${NEW_PY}\`** *(amd64 & arm64 verified)*" >> /tmp/changelog_items.txt
+            fi
           fi
 
-          echo "2. Checking Rclone Version..."
-          latest_rclone=$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}' | tr -d '[:space:]')
-          current_rclone=$(grep -E '^ARG RCLONE_VERSION=' Dockerfile | cut -d'=' -f2 | tr -d '[:space:]')
-          if [ -n "$latest_rclone" ] && [ "$latest_rclone" != "$current_rclone" ]; then
-            sed -i "s|^ARG RCLONE_VERSION=.*|ARG RCLONE_VERSION=${latest_rclone}|g" Dockerfile
-            echo "- **Rclone Engine**: Updated \`rclone\` from \`${current_rclone}\` to \`${latest_rclone}\`." >> /tmp/changelog_items.txt
+          # 2. Kiểm tra Rclone (xác nhận HTTP 200 cho cả gói .deb amd64 và arm64)
+          CAND_RCLONE=$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}' | tr -d ' \r\n' || echo "")
+          if [[ "$CAND_RCLONE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] && [ "$CAND_RCLONE" != "$CUR_RCLONE" ]; then
+            OK_AMD64=$(curl -s -o /dev/null -L -I -w '%{http_code}' --max-time 20 "https://downloads.rclone.org/${CAND_RCLONE}/rclone-${CAND_RCLONE}-linux-amd64.deb")
+            OK_ARM64=$(curl -s -o /dev/null -L -I -w '%{http_code}' --max-time 20 "https://downloads.rclone.org/${CAND_RCLONE}/rclone-${CAND_RCLONE}-linux-arm64.deb")
+            if [ "$OK_AMD64" = "200" ] && [ "$OK_ARM64" = "200" ]; then
+              NEW_RCLONE="$CAND_RCLONE"
+              DEP_UPDATED="true"
+              sed -i "s|^ARG RCLONE_VERSION=.*|ARG RCLONE_VERSION=${NEW_RCLONE}|g" Dockerfile
+              echo "- **Rclone Engine:** Updated from \`${CUR_RCLONE}\` ➡️ **\`${NEW_RCLONE}\`** *(amd64 & arm64 verified)*" >> /tmp/changelog_items.txt
+            fi
           fi
 
-          echo "3. Checking PyPI Requirements..."
+          # 3. Kiểm tra các gói PyPI trong requirements.txt
           while IFS= read -r line || [ -n "$line" ]; do
             clean_line=$(echo "$line" | tr -d '\r' | xargs)
             if [ -z "$clean_line" ] || echo "$clean_line" | grep -q '^#'; then
@@ -64,99 +91,344 @@ jobs:
             fi
             pkg=$(echo "$clean_line" | awk -F'==' '{print $1}')
             current_ver=$(echo "$clean_line" | awk -F'==' '{print $2}')
-            latest_ver=$(curl -fsSL "https://pypi.org/pypi/${pkg}/json" | jq -r '.info.version')
+            latest_ver=$(curl -fsSL "https://pypi.org/pypi/${pkg}/json" | jq -r '.info.version // empty' || echo "")
             if [ -n "$latest_ver" ] && [ "$latest_ver" != "null" ] && [ "$latest_ver" != "$current_ver" ]; then
               sed -i "s|^${pkg}==.*|${pkg}==${latest_ver}|g" requirements.txt
-              echo "- **Python Package**: Updated \`${pkg}\` from \`${current_ver}\` to \`${latest_ver}\`." >> /tmp/changelog_items.txt
+              DEP_UPDATED="true"
+              echo "- **Python Package (\`${pkg}\`):** Updated from \`${current_ver}\` ➡️ **\`${latest_ver}\`**" >> /tmp/changelog_items.txt
             fi
           done < requirements.txt
 
-      - name: Test Docker Build Before Committing
-        run: |
-          if [ -s /tmp/changelog_items.txt ]; then
-            echo "Updates detected. Running test build..."
-            docker build -t casaos-backup-manager:test .
-          else
-            echo "No updates detected."
+          # Tính toán SemVer APP_VERSION
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CUR_APP"
+          NEW_APP="$CUR_APP"
+          NEED_VERSION_BUMP="false"
+          UPDATE_TYPE="⏸️ Up-to-date"
+
+          PREV_APP=$(git show HEAD~1:Dockerfile 2>/dev/null | grep -E '^ARG APP_VERSION=' | cut -d'=' -f2 | tr -d '" \r\n' || echo "")
+          if [ "$PY_UPDATED" = "true" ]; then
+            NEW_APP="${MAJOR}.$((MINOR + 1)).0"
+            NEED_VERSION_BUMP="true"
+            UPDATE_TYPE="🚀 MINOR Upgrade (Python ${NEW_PY})"
+          elif [ "$DEP_UPDATED" = "true" ]; then
+            NEW_APP="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            NEED_VERSION_BUMP="true"
+            UPDATE_TYPE="⬆️ PATCH Upgrade (Dependencies)"
+          elif [ "${{ github.event_name }}" = "push" ] && [ -n "$PREV_APP" ] && [ "$PREV_APP" = "$CUR_APP" ] && gh release view "v${CUR_APP}" >/dev/null 2>&1; then
+            NEW_APP="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            NEED_VERSION_BUMP="true"
+            UPDATE_TYPE="🔧 PATCH Release (Code Update)"
           fi
 
-      - name: Update CHANGELOG and Commit
-        id: commit_changes
-        run: |
-          if [ -s /tmp/changelog_items.txt ]; then
-            TODAY=$(TZ=America/Denver date +'%Y-%m-%d')
-            python3 -c '
-          import pathlib, os
-          today = os.environ.get("TODAY", "")
-          items = pathlib.Path("/tmp/changelog_items.txt").read_text().strip()
-          p = pathlib.Path("CHANGELOG.md")
-          marker = "<!-- AUTO-CHANGELOG-ENTRY -->"
-          entry = f"{marker}\n\n## [Auto-Update] - {today}\n### Changed\n{items}"
-          if p.exists():
-              content = p.read_text()
-              if marker in content:
-                  content = content.replace(marker, entry, 1)
-              else:
-                  content = entry + "\n\n" + content
-          else:
-              content = "# Changelog\n\n" + entry + "\n"
-          p.write_text(content)
-          ' TODAY="$TODAY"
-
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add Dockerfile requirements.txt CHANGELOG.md
-            git commit -m "chore(deps): auto-update base packages (${TODAY})"
-            git pull --rebase origin main
-            git push origin HEAD:main
-            echo "updated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "updated=false" >> "$GITHUB_OUTPUT"
+          if grep -q '^ARG APP_VERSION=' Dockerfile; then
+            sed -i "s|^ARG APP_VERSION=.*|ARG APP_VERSION=${NEW_APP}|" Dockerfile
           fi
 
-  build-and-push-image:
-    name: Build and Publish Docker Image to GHCR
-    needs: auto-update-bases
-    if: always() && (needs.auto-update-bases.result == 'success' || needs.auto-update-bases.result == 'skipped') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || needs.auto-update-bases.outputs.updated == 'true')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Latest Code
-        uses: actions/checkout@v4
-        with:
-          ref: main
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          BUILD_DATE=$(TZ=America/Denver date +'%Y.%m.%d')
+          TODAY=$(TZ=America/Denver date +'%Y-%m-%d')
 
-      - name: Set up Docker Buildx
+          NEEDS_CHANGELOG_REBUILD="false"
+          if [ ! -f "CHANGELOG.md" ] || ! grep -q "### 📦 Component & Version Matrix" CHANGELOG.md 2>/dev/null || grep -q "## \[Auto-Update\] - $" CHANGELOG.md 2>/dev/null; then
+            NEEDS_CHANGELOG_REBUILD="true"
+          fi
+
+          SHOULD_BUILD="false"
+          if [ "$NEED_VERSION_BUMP" = "true" ] || [ "$NEEDS_CHANGELOG_REBUILD" = "true" ] || [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SHOULD_BUILD="true"
+          elif ! gh release view "v${NEW_APP}" >/dev/null 2>&1; then
+            SHOULD_BUILD="true"
+          fi
+
+          {
+            echo "cur_py=${CUR_PY}"
+            echo "new_py=${NEW_PY}"
+            echo "cur_rclone=${CUR_RCLONE}"
+            echo "new_rclone=${NEW_RCLONE}"
+            echo "cur_app=${CUR_APP}"
+            echo "new_app=${NEW_APP}"
+            echo "need_version_bump=${NEED_VERSION_BUMP}"
+            echo "needs_changelog_rebuild=${NEEDS_CHANGELOG_REBUILD}"
+            echo "should_build=${SHOULD_BUILD}"
+            echo "update_type=${UPDATE_TYPE}"
+            echo "image_name=${IMAGE_NAME}"
+            echo "build_date=${BUILD_DATE}"
+            echo "today=${TODAY}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: "📝 3. Generate Clean Professional CHANGELOG.md"
+        if: steps.check.outputs.should_build == 'true'
+        env:
+          CUR_PY: ${{ steps.check.outputs.cur_py }}
+          NEW_PY: ${{ steps.check.outputs.new_py }}
+          CUR_RCLONE: ${{ steps.check.outputs.cur_rclone }}
+          NEW_RCLONE: ${{ steps.check.outputs.new_rclone }}
+          CUR_APP: ${{ steps.check.outputs.cur_app }}
+          NEW_APP: ${{ steps.check.outputs.new_app }}
+          NEED_VERSION_BUMP: ${{ steps.check.outputs.need_version_bump }}
+          NEEDS_REBUILD: ${{ steps.check.outputs.needs_changelog_rebuild }}
+          IMAGE_NAME: ${{ steps.check.outputs.image_name }}
+          TODAY: ${{ steps.check.outputs.today }}
+        run: |
+          set -e
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+          MANUAL_CHANGELOG=$(echo "$CHANGED_FILES" | grep -q '^CHANGELOG\.md$' && echo "true" || echo "false")
+
+          if [ "$MANUAL_CHANGELOG" = "false" ] && { [ "$NEED_VERSION_BUMP" = "true" ] || [ "$NEEDS_REBUILD" = "true" ]; }; then
+            FASTAPI_V=$(grep -oP '^fastapi==\K\S+' requirements.txt || echo "-")
+            UVICORN_V=$(grep -oP '^uvicorn==\K\S+' requirements.txt || echo "-")
+            DOCKER_V=$(grep -oP '^docker==\K\S+' requirements.txt || echo "-")
+            PYDANTIC_V=$(grep -oP '^pydantic==\K\S+' requirements.txt || echo "-")
+            APSCHED_V=$(grep -oP '^apscheduler==\K\S+' requirements.txt || echo "-")
+
+            VER_LINE="\`v${NEW_APP}\`"
+            [ "$NEW_APP" != "$CUR_APP" ] && VER_LINE="Bumped from \`v${CUR_APP}\` ➡️ **\`v${NEW_APP}\`**"
+
+            PY_LINE="\`python:${NEW_PY}\`"
+            [ "$NEW_PY" != "$CUR_PY" ] && PY_LINE="Upgraded from \`python:${CUR_PY}\` ➡️ **\`python:${NEW_PY}\`**"
+
+            RCLONE_LINE="\`${NEW_RCLONE}\`"
+            [ "$NEW_RCLONE" != "$CUR_RCLONE" ] && RCLONE_LINE="Updated from \`${CUR_RCLONE}\` ➡️ **\`${NEW_RCLONE}\`**"
+
+            NOTES_LINES=""
+            if [ -s /tmp/changelog_items.txt ]; then
+              NOTES_LINES=$(cat /tmp/changelog_items.txt)
+            else
+              COMMIT_MSG=$(git log -1 --pretty=%s | tr -d '"`')
+              if [[ ! "$COMMIT_MSG" =~ ^(Add\ files\ via\ upload|Update\ |Create\ |Delete\ |Rename\ |Merge\ ) ]] && [ -n "$COMMIT_MSG" ]; then
+                NOTES_LINES="- **Update:** ${COMMIT_MSG}"
+              else
+                echo "$CHANGED_FILES" | grep -q 'app/main\.py' && NOTES_LINES+="- **Core Engine & Security:** Refined backup/restore engine, security guards, and API stability."$'\n'
+                echo "$CHANGED_FILES" | grep -q 'app/templates/' && NOTES_LINES+="- **Web UI:** Updated bilingual glassmorphic interface and dashboard UX."$'\n'
+                echo "$CHANGED_FILES" | grep -q 'Dockerfile' && NOTES_LINES+="- **Multi-Arch Build:** Added native \`linux/amd64\` & \`linux/arm64\` pre-built GHCR images and container healthcheck."$'\n'
+                [ -z "$NOTES_LINES" ] && NOTES_LINES="- **Maintenance:** Multi-arch GHCR release sync and cleaned changelog layout."
+              fi
+            fi
+
+            BLOCK=$(cat <<EOF
+          ## ${NEW_APP}
+          _Released: ${TODAY}_
+
+          ### 📦 Component & Version Matrix
+          - **Docker Image Release:** ${VER_LINE}
+          - **Supported Architectures:** \`linux/amd64\` & \`linux/arm64\` *(Multi-Arch GHCR Manifest)*
+          - **Python Base Image:** ${PY_LINE}
+          - **Rclone Engine:** ${RCLONE_LINE}
+          - **Core Python Stack:** \`FastAPI ${FASTAPI_V}\` • \`Uvicorn ${UVICORN_V}\` • \`Docker SDK ${DOCKER_V}\` • \`Pydantic ${PYDANTIC_V}\` • \`APScheduler ${APSCHED_V}\`
+
+          ### 🔐 Package Integrity (GHCR Multi-Arch)
+          - **Image Tag:** \`${IMAGE_NAME}:v${NEW_APP}\`
+          - **Latest Tag:** \`${IMAGE_NAME}:latest\`
+
+          ### 🚀 What's Changed
+          ${NOTES_LINES}
+          EOF
+            )
+
+            python3 - "$BLOCK" "$NEEDS_REBUILD" <<'PY'
+          import sys, re, os
+          block, rebuild = sys.argv[1].strip(), sys.argv[2] == "true"
+          sections = []
+          if not rebuild and os.path.exists("CHANGELOG.md"):
+              with open("CHANGELOG.md", "r", encoding="utf-8") as f:
+                  old = f.read()
+              old_body = re.sub(r'^#\s+Changelog\s*', '', old, flags=re.I).strip()
+              for p in [x.strip() for x in old_body.split("\n---\n") if x.strip()]:
+                  if "## [Auto-Update] -" not in p and "Add files via upload" not in p:
+                      sections.append(p)
+          out = "# Changelog\n\n" + "\n\n---\n\n".join([block] + sections[:4]) + "\n"
+          with open("CHANGELOG.md", "w", encoding="utf-8") as f:
+              f.write(out)
+          PY
+          fi
+
+      - name: "⚙️ 4a. Set up QEMU (Multi-Arch Support)"
+        if: steps.check.outputs.should_build == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: "⚙️ 4b. Set up Docker Buildx"
+        if: steps.check.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
+      - name: "🔐 4c. Log in to GitHub Container Registry (GHCR)"
+        if: steps.check.outputs.should_build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare Image Metadata
-        id: meta
-        run: |
-          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          BUILD_DATE=$(TZ=America/Denver date +'%Y.%m.%d')
-          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "build_date=${BUILD_DATE}" >> "$GITHUB_OUTPUT"
-
-      - name: Build and Push Docker Image
+      - name: "🐳 4d. Build & Push Multi-Arch Image (amd64 + arm64) BEFORE Commit"
+        id: build_push
+        if: steps.check.outputs.should_build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          sbom: false
           labels: |
-            org.opencontainers.image.title=CasaOS Backup Manager
+            org.opencontainers.image.title=CasaOS Backup Manager Pro
             org.opencontainers.image.description=Self-contained Backup and Recovery Manager for CasaOS
+            org.opencontainers.image.version=${{ steps.check.outputs.new_app }}
             org.opencontainers.image.url=https://github.com/boystyle2010/casaos-backup-manager
             org.opencontainers.image.source=https://github.com/boystyle2010/casaos-backup-manager
             io.casaos.icon=https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/icon.png
           tags: |
-            ${{ steps.meta.outputs.image_name }}:latest
-            ${{ steps.meta.outputs.image_name }}:${{ steps.meta.outputs.build_date }}
+            ${{ steps.check.outputs.image_name }}:latest
+            ${{ steps.check.outputs.image_name }}:v${{ steps.check.outputs.new_app }}
+            ${{ steps.check.outputs.image_name }}:${{ steps.check.outputs.build_date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: "📤 5. Verified Commit (GraphQL API) & Create/Update GitHub Release"
+        if: steps.check.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_APP: ${{ steps.check.outputs.new_app }}
+          TODAY: ${{ steps.check.outputs.today }}
+          IMAGE_NAME: ${{ steps.check.outputs.image_name }}
+          DIGEST: ${{ steps.build_push.outputs.digest }}
+        run: |
+          set -e
+
+          # Chèn SHA256 Digest thực tế của image multi-arch vào CHANGELOG.md
+          if [ -n "$DIGEST" ] && [ -f "CHANGELOG.md" ]; then
+            sed -i "s|\(${IMAGE_NAME}:v${NEW_APP}\`\).*|\1 (\`${DIGEST}\`)|" CHANGELOG.md
+          fi
+
+          # Keep-alive đặt tại .github/.keepalive (để GITHUB_TOKEN được phép ghi)
+          LAST_COMMIT_TS=$(git log -1 --format=%ct || date +%s)
+          NOW_TS=$(date +%s)
+          DAYS_IDLE=$(( (NOW_TS - LAST_COMMIT_TS) / 86400 ))
+          if [ "$DAYS_IDLE" -ge 45 ]; then
+            mkdir -p .github
+            echo "Last automated keep-alive check: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" > .github/.keepalive
+          fi
+
+          git add Dockerfile requirements.txt CHANGELOG.md .github/.keepalive 2>/dev/null || git add Dockerfile requirements.txt CHANGELOG.md
+
+          if ! git diff --staged --quiet; then
+            export COMMIT_MSG="chore(release): v${NEW_APP} (${TODAY}) [skip ci]"
+
+            python3 - <<'PY'
+          import base64, json, os, subprocess, sys, time, urllib.request, urllib.error
+
+          token = os.environ["GH_TOKEN"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          msg = os.environ["COMMIT_MSG"]
+
+          raw = subprocess.check_output(["git", "diff", "--cached", "--no-renames", "--name-status", "-z"])
+          parts = [p for p in raw.split(b"\x00") if p]
+          additions, deletions = [], []
+          for i in range(0, len(parts), 2):
+              st = parts[i].decode("utf-8")
+              path = parts[i + 1].decode("utf-8")
+              if st.startswith("D"):
+                  deletions.append({"path": path})
+              elif os.path.isfile(path):
+                  with open(path, "rb") as f:
+                      b64 = base64.b64encode(f.read()).decode("ascii")
+                  additions.append({"path": path, "contents": b64})
+
+          if not additions and not deletions:
+              sys.exit(0)
+
+          file_changes = {}
+          if additions: file_changes["additions"] = additions
+          if deletions: file_changes["deletions"] = deletions
+
+          query = """
+          mutation($input: CreateCommitOnBranchInput!) {
+            createCommitOnBranch(input: $input) {
+              commit { oid url }
+            }
+          }
+          """
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Content-Type": "application/json",
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "github-actions-verified-commit"
+          }
+
+          for attempt in range(1, 4):
+              ref_req = urllib.request.Request(f"https://api.github.com/repos/{repo}/git/ref/heads/main", headers=headers)
+              with urllib.request.urlopen(ref_req, timeout=20) as r:
+                  head_oid = json.loads(r.read().decode("utf-8"))["object"]["sha"]
+
+              payload = {
+                  "query": query,
+                  "variables": {
+                      "input": {
+                          "branch": {"repositoryNameWithOwner": repo, "branchName": "main"},
+                          "message": {"headline": msg},
+                          "fileChanges": file_changes,
+                          "expectedHeadOid": head_oid
+                      }
+                  }
+              }
+              gql_req = urllib.request.Request(
+                  "https://api.github.com/graphql",
+                  data=json.dumps(payload).encode("utf-8"),
+                  headers=headers,
+                  method="POST"
+              )
+              try:
+                  with urllib.request.urlopen(gql_req, timeout=30) as r:
+                      resp = json.loads(r.read().decode("utf-8"))
+                  if not resp.get("errors") and resp.get("data", {}).get("createCommitOnBranch"):
+                      c = resp["data"]["createCommitOnBranch"]["commit"]
+                      print(f"✅ Verified commit created: {c['oid']} ({c['url']})")
+                      sys.exit(0)
+                  print(f"⚠️ Attempt {attempt} GraphQL error: {resp.get('errors')}", file=sys.stderr)
+              except urllib.error.HTTPError as e:
+                  print(f"⚠️ Attempt {attempt} HTTP {e.code}: {e.read().decode('utf-8', 'ignore')}", file=sys.stderr)
+              time.sleep(attempt * 5)
+          sys.exit(1)
+          PY
+
+            git reset --hard HEAD
+            git fetch origin main
+            git checkout -B main origin/main
+          fi
+
+          TAG="v${NEW_APP}"
+          python3 - <<'PY' > /tmp/release_notes.md
+          import re
+          with open("CHANGELOG.md", "r", encoding="utf-8") as f:
+              text = f.read()
+          text = re.sub(r'^#\s+Changelog\s*', '', text, flags=re.I).strip()
+          first_section = text.split("\n---\n")[0].strip() if "\n---\n" in text else re.split(r'\n(?=##\s)', text)[0].strip()
+          print(first_section)
+          PY
+
+          git tag -f "${TAG}"
+          git push origin "${TAG}" --force
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" \
+              --title "CasaOS Backup Manager Pro ${TAG}" \
+              --notes-file /tmp/release_notes.md \
+              --latest
+          else
+            gh release create "${TAG}" \
+              --title "CasaOS Backup Manager Pro ${TAG}" \
+              --notes-file /tmp/release_notes.md \
+              --latest
+          fi
+
+      - name: "📊 6. Execution Dashboard"
+        if: always()
+        run: |
+          cat << EOF >> "$GITHUB_STEP_SUMMARY"
+          # 🛡️ CasaOS Backup Manager Pro CI/CD Summary
+
+          | Component | Previous | Latest | Status |
+          | :--- | :--- | :--- | :--- |
+          | **App Version** | \`v${{ steps.check.outputs.cur_app }}\` | \`v${{ steps.check.outputs.new_app }}\` | ${{ steps.check.outputs.update_type }} |
+          | **Python Base** | \`python:${{ steps.check.outputs.cur_py }}\` | \`python:${{ steps.check.outputs.new_py }}\` | ✅ Multi-Arch Verified |
+          | **Rclone Engine** | \`${{ steps.check.outputs.cur_rclone }}\` | \`${{ steps.check.outputs.new_rclone }}\` | ✅ amd64 & arm64 Verified |
+          | **GHCR Publish** | — | \`${{ steps.check.outputs.image_name }}:v${{ steps.check.outputs.new_app }}\` | ${{ steps.build_push.outcome == 'success' && '🟢 Published (amd64 + arm64)' || '⏭️ Skipped / Failed' }} |
+          EOF
