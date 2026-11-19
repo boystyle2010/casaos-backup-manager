@@ -1153,7 +1153,7 @@ def restore_single_app(app_name: str, version_id: str, source: str = "ssd", recr
 
         try:
             with tarfile.open(tar_to_extract, "r:gz") as tar:
-                tar.extractall(path=temp_extract)
+                tar.extractall(path=temp_extract, filter="data")
 
             for m_info in manifest.get("mounts_map", []):
                 if not should_backup_mount(m_info.get("source", ""), app_name):
