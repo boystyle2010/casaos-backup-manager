@@ -864,7 +864,7 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
         with open(target_dir / "manifest.json", "w") as f:
             json.dump(manifest, f, indent=2)
 
-        if settings.get("backup_mode") in ["cloud", "local_cloud"]:
+                if settings.get("backup_mode") in ["cloud", "local_cloud"]:
             if manage_task_state:
                 update_task(True, "backup", f"Đang tải {app_name} lên Cloud...", f"Đồng bộ gói {size_mb} MB lên Cloud", 80, "running")
             ok, msg = sync_to_cloud(app_name=app_name, version_id=ver_id, update_progress=False)
@@ -872,8 +872,16 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
                 raise TaskCancelledError("Đã hủy khi đang tải lên Cloud")
             manifest["synced_cloud"] = bool(ok)
             if ok and (target_dir / "manifest.json").exists():
-                with open(target_dir / "manifest.json", "w") as f:
-                    json.dump(manifest, f, indent=2)
+                atomic_write_json(target_dir / "manifest.json", manifest)
+                cache = load_cloud_cache()
+                cache[f"{app_name}/{ver_id}"] = manifest
+                save_cloud_cache(cache)
+                remote = settings.get("rclone_remote", "").strip().rstrip("/")
+                if remote:
+                    subprocess.run(
+                        ["rclone", "copyto", str(target_dir / "manifest.json"), f"{remote}/apps/{app_name}/{ver_id}/manifest.json"],
+                        capture_output=True, timeout=30
+                    )
 
             if ok and settings.get("backup_mode") == "cloud":
                 shutil.rmtree(target_dir, ignore_errors=True)
