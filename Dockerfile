@@ -1,7 +1,7 @@
 FROM python:3.15-slim
 
 ARG TARGETARCH
-ARG APP_VERSION=1.0.4
+ARG APP_VERSION=1.0.5
 ARG RCLONE_VERSION=v1.76.0
 
 LABEL org.opencontainers.image.title="CasaOS Backup Manager Pro" \
