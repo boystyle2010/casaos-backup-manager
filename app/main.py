@@ -864,7 +864,7 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
         with open(target_dir / "manifest.json", "w") as f:
             json.dump(manifest, f, indent=2)
 
-                if settings.get("backup_mode") in ["cloud", "local_cloud"]:
+        if settings.get("backup_mode") in ["cloud", "local_cloud"]:
             if manage_task_state:
                 update_task(True, "backup", f"Đang tải {app_name} lên Cloud...", f"Đồng bộ gói {size_mb} MB lên Cloud", 80, "running")
             ok, msg = sync_to_cloud(app_name=app_name, version_id=ver_id, update_progress=False)
