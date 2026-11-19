@@ -2,20 +2,15 @@ name: casaos-backup-manager
 services:
   backup-manager:
     image: ghcr.io/boystyle2010/casaos-backup-manager:latest
-    build:
-      context: /DATA/AppData/casaos-backup-manager
-      dockerfile: Dockerfile
     container_name: casaos-backup-manager
     hostname: casaos-backup-manager
     restart: unless-stopped
-    cpu_shares: 90
-    deploy:
-      resources:
-        limits:
-          memory: "7613710336"
     environment:
       BACKUP_ROOT: /DATA/Backups
-      TZ: America/Denver # Múi giờ Albuquerque
+      TZ: America/Denver
+      # (Tùy chọn bảo mật) Bỏ dấu # nếu muốn khóa toàn bộ Web UI & API bằng Basic Auth
+      # ADMIN_USER: admin
+      # ADMIN_PASS: changeme_strong_password
     ports:
       - mode: ingress
         target: 8095
@@ -35,13 +30,12 @@ services:
         source: /DATA/AppData/casaos-backup-manager/config
         target: /root/.config/rclone
     labels:
-      # Liên kết đến file ảnh icon bạn vừa tải lên repo GitHub boystyle2010
-      icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/assets/icon_3d.png
+      icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/icon.png
     x-casaos:
       author: boystyle2010
       category: Utilities
       hostname: ""
-      icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/assets/icon_3d.png
+      icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/icon.png
       index: /
       port_map: "8095"
       scheme: http
@@ -57,7 +51,7 @@ x-casaos:
   author: boystyle2010
   category: self
   hostname: ""
-  icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/assets/icon_3d.png
+  icon: https://raw.githubusercontent.com/boystyle2010/casaos-backup-manager/main/icon.png
   index: /
   is_uncontrolled: false
   port_map: "8095"
