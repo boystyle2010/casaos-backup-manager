@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Đăng nhập • CasaOS Backup Manager</title>
+  <script>
+    if ((localStorage.getItem('cbm_theme') || 'dark') === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            darkbg: '#0a0d12',
+            darkcard: '#131720',
+            darkborder: '#222834'
+          }
+        }
+      }
+    }
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+    }
+    html, body { background-color: #e4ebf5; }
+    html.dark, html.dark body { background-color: #09101f; }
+    body {
+      background-image:
+        radial-gradient(ellipse 95% 260px at 50% 15%, rgba(59, 130, 246, 0.22) 0%, transparent 100%),
+        radial-gradient(circle 340px at 88% 55%, rgba(139, 92, 246, 0.16) 0%, transparent 100%),
+        radial-gradient(circle 340px at 12% 85%, rgba(16, 185, 129, 0.14) 0%, transparent 100%);
+      background-repeat: no-repeat;
+    }
+    html.dark body {
+      background-image:
+        radial-gradient(ellipse 95% 280px at 50% 15%, rgba(37, 99, 235, 0.30) 0%, transparent 100%),
+        radial-gradient(circle 360px at 88% 55%, rgba(124, 58, 237, 0.18) 0%, transparent 100%),
+        radial-gradient(circle 360px at 12% 85%, rgba(16, 185, 129, 0.14) 0%, transparent 100%);
+      background-repeat: no-repeat;
+    }
+    .glass-card {
+      background-color: rgba(255, 255, 255, 0.90);
+      backdrop-filter: saturate(180%) blur(24px);
+      -webkit-backdrop-filter: saturate(180%) blur(24px);
+      box-shadow: 0 20px 45px -12px rgba(15, 23, 42, 0.14), inset 0 1px 0 0 rgba(255, 255, 255, 1);
+    }
+    html.dark .glass-card {
+      background-color: rgba(17, 24, 39, 0.84);
+      background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+      box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.96) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .animate-pop { animation: popIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1); }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 text-slate-900 dark:text-slate-100 transition-colors duration-150"
+      x-data="loginPage()" x-init="init()" x-cloak>
+
+  <div class="w-full max-w-[390px] glass-card border border-slate-200/90 dark:border-darkborder rounded-3xl p-6 sm:p-7 animate-pop relative">
+
+    <!-- Nút đổi Ngôn ngữ & Giao diện đồng bộ với index.html -->
+    <div class="flex items-center justify-end gap-1.5 mb-2">
+      <button type="button" @click="toggleLang()"
+              class="h-8 px-2.5 rounded-xl text-[11px] font-extrabold inline-flex items-center gap-1 border border-slate-200 dark:border-darkborder bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition">
+        <span x-text="lang.toUpperCase()"></span>
+      </button>
+      <button type="button" @click="toggleTheme()"
+              class="w-8 h-8 rounded-xl inline-flex items-center justify-center border border-slate-200 dark:border-darkborder bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+        <svg x-show="darkMode" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/>
+        </svg>
+        <svg x-show="!darkMode" class="w-4 h-4 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Logo & Tiêu đề -->
+    <div class="text-center mb-6">
+      <div class="w-16 h-16 mx-auto mb-3.5 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+        </svg>
+      </div>
+      <div class="flex items-center justify-center gap-1.5">
+        <h1 class="text-xl font-extrabold tracking-tight">Backup Manager</h1>
+        <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">PRO</span>
+      </div>
+      <div class="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 text-blue-600 dark:text-blue-400 text-[11px] font-semibold">
+        <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <span x-text="hostLabel"></span>
+      </div>
+    </div>
+
+    <!-- Thông báo lỗi -->
+    <div x-show="errorMsg" x-transition.opacity
+         class="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-300 text-xs font-semibold text-center"
+         x-text="errorMsg">
+    </div>
+
+    <!-- Form đăng nhập -->
+    <form @submit.prevent="submitLogin()" class="space-y-3.5">
+      <div>
+        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 pl-1"
+               x-text="t('username')"></label>
+        <div class="relative flex items-center">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>
+          </svg>
+          <input type="text" x-model="username" :placeholder="t('userPlaceholder')" autocomplete="username" required autofocus
+                 class="w-full h-11 pl-10 pr-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-darkborder text-sm font-medium focus:outline-none focus:border-blue-500 transition" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 pl-1"
+               x-text="t('password')"></label>
+        <div class="relative flex items-center">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+          <input :type="showPass ? 'text' : 'password'" x-model="password" :placeholder="t('passPlaceholder')" autocomplete="current-password" required
+                 class="w-full h-11 pl-10 pr-10 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-darkborder text-sm font-medium focus:outline-none focus:border-blue-500 transition" />
+          <button type="button" @click="showPass = !showPass"
+                  class="absolute right-2.5 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+            <svg x-show="!showPass" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <svg x-show="showPass" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <label class="flex items-center gap-2 pt-0.5 pb-1 cursor-pointer select-none text-xs font-medium text-slate-600 dark:text-slate-300">
+        <input type="checkbox" x-model="remember" class="w-4 h-4 rounded accent-blue-600" />
+        <span x-text="t('remember')"></span>
+      </label>
+
+      <button type="submit" :disabled="loading"
+              class="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] disabled:opacity-55 text-white text-sm font-bold shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2">
+        <svg x-show="loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+        <span x-text="loading ? t('signingIn') : t('signIn')"></span>
+        <svg x-show="!loading" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+        </svg>
+      </button>
+    </form>
+
+    <!-- Nhãn tính năng phía dưới -->
+    <div class="mt-6 pt-4 border-t border-slate-200/80 dark:border-darkborder flex items-center justify-center gap-1.5 flex-wrap">
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">Local SSD</span>
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">Cloud Rclone</span>
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">AES-256</span>
+      <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Auto Cron</span>
+    </div>
+  </div>
+
+  <script>
+    const LOGIN_I18N = {
+      vi: {
+        username: 'Tên đăng nhập',
+        password: 'Mật khẩu',
+        userPlaceholder: 'Nhập tên đăng nhập...',
+        passPlaceholder: 'Nhập mật khẩu...',
+        remember: 'Duy trì đăng nhập (30 ngày)',
+        signIn: 'Đăng nhập',
+        signingIn: 'Đang xác thực...',
+        invalid: 'Sai tên đăng nhập hoặc mật khẩu',
+        connErr: 'Lỗi kết nối máy chủ. Vui lòng thử lại.'
+      },
+      en: {
+        username: 'Username',
+        password: 'Password',
+        userPlaceholder: 'Enter username...',
+        passPlaceholder: 'Enter password...',
+        remember: 'Keep me signed in (30 days)',
+        signIn: 'Sign In',
+        signingIn: 'Signing in...',
+        invalid: 'Invalid username or password',
+        connErr: 'Connection error. Please try again.'
+      }
+    };
+
+    function loginPage() {
+      return {
+        lang: localStorage.getItem('cbm_lang') || 'vi',
+        darkMode: (localStorage.getItem('cbm_theme') || 'dark') === 'dark',
+        hostLabel: location.host || 'CasaOS Backup Gateway',
+        username: '',
+        password: '',
+        remember: true,
+        showPass: false,
+        loading: false,
+        errorMsg: '',
+        init() {
+          document.documentElement.classList.toggle('dark', this.darkMode);
+        },
+        t(k) { return (LOGIN_I18N[this.lang] && LOGIN_I18N[this.lang][k]) || k; },
+        toggleLang() {
+          this.lang = this.lang === 'vi' ? 'en' : 'vi';
+          localStorage.setItem('cbm_lang', this.lang);
+        },
+        toggleTheme() {
+          this.darkMode = !this.darkMode;
+          localStorage.setItem('cbm_theme', this.darkMode ? 'dark' : 'light');
+          document.documentElement.classList.toggle('dark', this.darkMode);
+        },
+        async submitLogin() {
+          this.errorMsg = '';
+          this.loading = true;
+          try {
+            const res = await fetch('/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CBM-CSRF': '1' },
+              body: JSON.stringify({
+                username: this.username.trim(),
+                password: this.password,
+                remember: this.remember
+              })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.ok) {
+              const rd = new URLSearchParams(location.search).get('rd') || '/';
+              location.replace(rd.startsWith('/') && !rd.startsWith('//') ? rd : '/');
+            } else {
+              this.errorMsg = data.detail || this.t('invalid');
+              this.loading = false;
+            }
+          } catch (e) {
+            this.errorMsg = this.t('connErr');
+            this.loading = false;
+          }
+        }
+      }
+    }
+  </script>
+</body>
+</html>
