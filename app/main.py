@@ -305,7 +305,7 @@ def check_mount_size_within_limit(path_str: str, limit_bytes: int) -> tuple[bool
     return True, total
 
 def get_free_ssd_gb() -> float:
-    _, _, free = shutil.disk_usage("/DATA")
+    _, _, free = shutil.disk_usage(BACKUP_ROOT)
     return round(free / (1024 ** 3), 2)
 
 def should_backup_mount(source: str, app_name: str = "") -> bool:
@@ -717,7 +717,7 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
                 raise AppSkippedOversizeError(
                     f"Phình quá mức cho phép (nặng hơn {est_gb} GB / giới hạn {max_app_gb} GB)"
                 )
-            _, _, current_free_b = shutil.disk_usage("/DATA")
+            _, _, current_free_b = shutil.disk_usage(BACKUP_ROOT)
             if (current_free_b - total_est_bytes) < min_free_bytes:
                 raise AppSkippedOversizeError(
                     f"Dữ liệu quá lớn so với dung lượng SSD còn trống (giữ tối thiểu {min_free_gb} GB)"
@@ -768,7 +768,7 @@ def backup_single_app(app_name: str, manage_task_state: bool = True) -> dict:
                     f"Phát sinh file vượt ngưỡng {max_app_gb} GB khi đang nén (Đã tự động hủy & xóa file tạm)"
                 )
             if tar_state["files_count"] % 150 == 0:
-                _, _, free_b = shutil.disk_usage("/DATA")
+                _, _, free_b = shutil.disk_usage(BACKUP_ROOT)
                 if free_b < min_free_bytes:
                     raise AppSkippedOversizeError(
                         f"Ổ SSD chạm ngưỡng đầy dưới {min_free_gb} GB khi đang nén (Đã ngắt khẩn cấp)"
@@ -1318,7 +1318,7 @@ def api_overview(refresh_cloud: bool = False):
     if refresh_cloud:
         refresh_cloud_cache()
         invalidate_dir_cache()
-    total, used, free = shutil.disk_usage("/DATA")
+    total, used, free = shutil.disk_usage(BACKUP_ROOT)
     merged_backups = get_merged_backups()
     containers = discover_containers(merged_backups)
     settings = load_settings()
